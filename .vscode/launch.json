@@ -1,0 +1,47 @@
+{
+    // Verwendet IntelliSense zum Ermitteln möglicher Attribute.
+    // Zeigen Sie auf vorhandene Attribute, um die zugehörigen Beschreibungen anzuzeigen.
+    // Weitere Informationen finden Sie unter https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "cppdbg",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/build/bat_desktop",
+            "request": "launch",
+            "args" : [ "${workspaceFolder}/capture0975.raw" ],
+            "linux": {
+                "MIMode": "gdb",
+                "miDebuggerPath": "/usr/bin/gdb"
+              },
+              "osx": {
+                "MIMode": "lldb"
+              },
+              "windows": {
+                "MIMode": "gdb",
+                "miDebuggerPath": "C:\\MinGw\\bin\\gdb.exe"
+              }
+        },
+        {
+          "name": "Debug",
+          "type": "CMake: Debug",
+          "cwd": "${workspaceFolder}",
+          "program": "${workspaceFolder}/build/bat_desktop",
+          "request": "launch",
+          "args" : [ "${workspaceFolder}/capture0975.raw" ],
+          "linux": {
+              "MIMode": "gdb",
+              "miDebuggerPath": "/usr/bin/gdb"
+            },
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "windows": {
+              "MIMode": "gdb",
+              "miDebuggerPath": "C:\\MinGw\\bin\\gdb.exe"
+            }
+      },
+      
+    ]
+}
