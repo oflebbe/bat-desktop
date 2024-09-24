@@ -10,13 +10,14 @@
 #include <vector>
 #include <filesystem>
 #include "window.h"
-#include "classify.h"
+#include "create_image.h"
+#include "flo_file.h"
 
 int main(int argc, char *argv[])
 {
   if (argc <= 1)
   {
-    fmt::print("usage: filename\n");
+    printf("usage: filename\n");
     exit(1);
   }
 
@@ -24,17 +25,30 @@ int main(int argc, char *argv[])
 
   Window qwindow;
   QDirIterator it(argv[1]);
-  Classifier c( 512);
-  while (it.hasNext()) {
-      QFileInfo fi = it.nextFileInfo();
-      if (fi.suffix() == "raw") {
-        c.open(fi.filePath().toStdString());
-        if (c.isRelevant())
-        {
-          qwindow.addImage(c.image());
-        }
-      }
 
+  while (it.hasNext())
+  {
+    QFileInfo fi = it.nextFileInfo();
+    if (fi.suffix() == "raw")
+    {
+      long size = 0;
+      uint16_t *raw_file = (uint16_t *) flo_readfile( fi.filesystemFilePath().c_str(), &size);
+      if (!raw_file) {
+        continue;
+      }
+      if (size % 2 == 1) {
+        free(raw_file);
+        continue;   
+      }
+      size /= 2;
+      flo_pixmap_t *pixmap = create_image(size, raw_file, 512);
+      free( raw_file);
+      if (!pixmap) {
+        continue;
+      }
+      QImage qimage((uchar *)pixmap->buf, pixmap->width, pixmap->height, QImage::Format_RGB16, free, pixmap);
+      qwindow.addImage(qimage);
+    }
   }
 
   qwindow.show();

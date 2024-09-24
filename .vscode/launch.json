@@ -7,13 +7,14 @@
 
 
 
+
         {
             "name": "Debug",
             "type": "cppdbg",
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}/build/bat_desktop",
             "request": "launch",
-            "args" : [ "." ],
+            "args" : [ "/media/olaf/BAT" ],
             // "args" : [ "." ],
             "linux": {
                 "MIMode": "gdb",

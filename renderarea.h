@@ -12,10 +12,7 @@ class RenderArea : public QWidget
 public:
     explicit RenderArea(QWidget *parent = nullptr);
 
-   /* QSize minimumSizeHint() const override;
-    QSize sizeHint() const override; */
     void addPixmap(const QPixmap& pix);
-
 public slots:
     
 protected:

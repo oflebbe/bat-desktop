@@ -1,3 +1,8 @@
+// MIT License
+// (c) Olaf Flebbe 2024
+
+// A rgb16 pixmap
+
 #ifndef FLO_PIXMAP_H
 #define FLO_PIXMAP_H
 
@@ -5,12 +10,11 @@
 extern "C" {
 #endif
 
-
 // 16bit color flo_pixmap_t (565)
 typedef struct
 {
-  uint width;
-  uint height;
+  unsigned int width;
+  unsigned int height;
   int len;
   uint16_t buf[];
 } flo_pixmap_t;
@@ -35,7 +39,7 @@ void flo_pixmap_draw_char(flo_pixmap_t *pixmap, int off_x, int off_y,
                          unsigned char c, uint16_t color, uint16_t bg,
                          int size_x, int size_y);
 
-inline uint16_t flo_swap(uint16_t color)
+__attribute__((always_inline)) inline uint16_t flo_swap(uint16_t color)
 {
   const uint8_t hi = (color >> 8) & 0xff;
   const uint8_t lo = color & 0xff;
@@ -223,10 +227,10 @@ const uint8_t flo_font[] = {
 
 // allocates a flo_pixmap_t
 // should be deallocated with free
-flo_pixmap_t *flo_pixmap_create(uint width, uint height)
+flo_pixmap_t *flo_pixmap_create(unsigned int width, unsigned int height)
 {
   int len = width * height;
-  flo_pixmap_t *pixmap = (flo_pixmap_t *) calloc(sizeof(flo_pixmap_t) + sizeof(uint16_t) * len, 1);
+  flo_pixmap_t *pixmap = (flo_pixmap_t *) calloc(1, sizeof(flo_pixmap_t) + sizeof(uint16_t) * len);
   if (pixmap == NULL)
   {
     abort();
@@ -236,7 +240,7 @@ flo_pixmap_t *flo_pixmap_create(uint width, uint height)
   return pixmap;
 }
 
-const flo_pixmap_t *of_pixmap_create_str(int len, const char str[],
+const flo_pixmap_t *flo_pixmap_create_str(int len, const char str[],
                                         int16_t color, uint16_t bg,
                                         int8_t size_x, int8_t size_y)
 {
