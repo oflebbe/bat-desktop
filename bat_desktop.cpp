@@ -7,10 +7,10 @@
 #include <QInputDialog>
 #include <QDirIterator>
 #include <QFileInfo>
-#include <vector>
 #include <filesystem>
 #include "window.h"
 #include "create_image.h"
+
 #include "flo_file.h"
 
 int main(int argc, char *argv[])
@@ -41,7 +41,8 @@ int main(int argc, char *argv[])
         continue;   
       }
       size /= 2;
-      flo_pixmap_t *pixmap = create_image(size, raw_file, 512);
+      float overlap_percent = 0.6;
+      flo_pixmap_t *pixmap = create_image_meow(size, raw_file, 512, overlap_percent);
       free( raw_file);
       if (!pixmap) {
         continue;

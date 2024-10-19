@@ -279,10 +279,10 @@ void flo_pixmap_draw_char(flo_pixmap_t *pixmap, int off_x, int off_y,
   color = flo_swap(color);
   bg = flo_swap(bg);
 
-  for (u_int8_t i = 0; i < flo_char_width; i++)
+  for (uint8_t i = 0; i < flo_char_width; i++)
   { // Char o1af_pixmap = 5 columns
     uint8_t line = flo_font[(int)c * flo_char_width + i];
-    for (u_int8_t j = 0; j < flo_char_height; j++, line >>= 1)
+    for (uint8_t j = 0; j < flo_char_height; j++, line >>= 1)
     {
       for (int x = 0; x < size_x; x++)
       {
@@ -305,7 +305,7 @@ void flo_pixmap_set_pixel(flo_pixmap_t *pixmap, unsigned int x,
 {
   assert(x < pixmap->width);
   assert(y < pixmap->height);
-  pixmap->buf[y * pixmap->width + x] = flo_swap(color);
+  pixmap->buf[y * pixmap->width + x] = color; // flo_swap(color);
 }
 #endif
 

@@ -5,17 +5,13 @@
     "version": "0.2.0",
     "configurations": [
 
-
-
-
         {
             "name": "Debug",
             "type": "cppdbg",
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}/build/bat_desktop",
             "request": "launch",
-            "args" : [ "/media/olaf/BAT" ],
-            // "args" : [ "." ],
+            "args" : [ "${workspaceFolder}/b" ],
             "linux": {
                 "MIMode": "gdb",
                 "miDebuggerPath": "/usr/bin/gdb"

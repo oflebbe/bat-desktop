@@ -26,7 +26,7 @@ void Window::addImage(const QImage &image)
   QPixmap qpix = QPixmap::fromImage(image);
   qpix.setDevicePixelRatio(this->devicePixelRatioF());
   renderArea->addPixmap(qpix);
-  renderArea->setMinimumSize(QSize(2000, 20000));
+  renderArea->setMinimumSize(QSize(2500, 40000));
 }
 
 void Window::mouseMoveEvent(QMouseEvent *event)

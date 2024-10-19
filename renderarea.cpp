@@ -27,9 +27,9 @@ void RenderArea::paintEvent(QPaintEvent * /* event */)
     int width = pixmaps.at(0).width() / pixmaps.at(0).devicePixelRatioF();
     int height = pixmaps.at(0).height()/ pixmaps.at(0).devicePixelRatioF();
     
-    
     // number of pixmaps per line
     int numX = this->width() / (width+padX);
+    if (numX < 1) numX = 1;   
 
     for (auto p : pixmaps)
     {
