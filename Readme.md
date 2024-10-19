@@ -15,3 +15,8 @@ Homebrew
 
 
 Windows
+
+
+Layout:
+minWidth = max( width of Screen (raw) , width of Pixmap)
+pro Zeile : minWidth- sum( images) > 0 

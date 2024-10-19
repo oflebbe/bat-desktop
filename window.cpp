@@ -1,6 +1,5 @@
 #include "window.h"
 
-#include <fmt/core.h>
 #include <QGridLayout>
 
 Window::Window()
@@ -13,26 +12,25 @@ Window::Window()
   scrollArea = new QScrollArea;
   scrollArea->setBackgroundRole(QPalette::Dark);
   scrollArea->setWidget(renderArea);
-  // scrollArea->setVerticalScrollBarPolicy( Qt::ScrollBarAlwaysOn);
+  scrollArea->setVerticalScrollBarPolicy( Qt::ScrollBarAlwaysOn);
+  scrollArea->setHorizontalScrollBarPolicy( Qt::ScrollBarAlwaysOn);
+  scrollArea->setWidgetResizable(true);
   layout->addWidget(scrollArea, 0, 0);
   layout->setColumnStretch(0, 1);
   layout->setRowStretch(0, 1);
+
 
   setWindowTitle(tr("BAT Desktop"));
 }
 
 void Window::addImage(const QImage &image)
 {
-  QPixmap qpix = QPixmap::fromImage(image);
-  qpix.setDevicePixelRatio(this->devicePixelRatioF());
-  renderArea->addPixmap(qpix);
-  renderArea->setMinimumSize(QSize(2500, 40000));
+  renderArea->addImage(image);
 }
 
 void Window::mouseMoveEvent(QMouseEvent *event)
 {
   QPoint pos = event->pos();
-  // fmt::print("{} {}\n", pos.rx(), pos.ry());
 }
 
 void Window::resizeEvent(QResizeEvent *e)

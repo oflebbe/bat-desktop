@@ -76,12 +76,10 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], int fft_size, f
       }
       else
       {
-
         uint16_t color = flo_hslToRgb565(1.f - ang, 1.0f, 0.5f);
         flo_pixmap_set_pixel(pixmap, col, height - j - 1, color);
       }
     }
-
   }
 
   free(fft_in);

@@ -1,6 +1,7 @@
 #include "renderarea.h"
 #include <QPainter>
-#include <fmt/core.h>
+#include <QWindow>
+#include <algorithm>
 
 const int padX = 20;
 const int padY = 20;
@@ -10,38 +11,49 @@ RenderArea::RenderArea(QWidget *parent)
 {
     setBackgroundRole(QPalette::Base);
     setAutoFillBackground(true);
+    gridWidth = 0;
+    gridHeight = 0;
 }
-
 
 void RenderArea::paintEvent(QPaintEvent * /* event */)
 {
-    if (pixmaps.size() == 0) {
+
+    if (pixmaps.size() == 0)
+    {
         return;
     }
-    
+    QScreen *screen = this->screen();
+
     QPainter painter(this);
     painter.setPen(palette().dark().color());
     painter.setBrush(Qt::NoBrush);
-    
-    int count = 0;
-    int width = pixmaps.at(0).width() / pixmaps.at(0).devicePixelRatioF();
-    int height = pixmaps.at(0).height()/ pixmaps.at(0).devicePixelRatioF();
-    
-    // number of pixmaps per line
-    int numX = this->width() / (width+padX);
-    if (numX < 1) numX = 1;   
 
-    for (auto p : pixmaps)
+    int cols = screen->size().width() / (gridWidth);
+
+    for (size_t j = 0; j < pixmaps.size(); j++)
     {
-        int col = count % numX;
-        int row = count / numX;
-        painter.drawPixmap(col*(width+padX), row * (height+padY), p);
-        count++;
+        int col = j % cols;
+        int row = j / cols;
+
+        painter.drawPixmap(col * (gridWidth + padX), row * (gridHeight + padY), pixmaps[j]);
     }
 }
 
-void RenderArea::addPixmap(const QPixmap &pix)
+void RenderArea::addImage(const QImage &image)
 {
-    pixmaps.push_back(pix);
+    QPixmap qpix = QPixmap::fromImage(image);
+    double scale = this->devicePixelRatioF();
+    //scale= 1.25;
+    qpix.setDevicePixelRatio(scale);
+    pixmaps.push_back(qpix);
+    gridWidth = std::max(gridWidth, (int)(qpix.width() / scale));
+    gridHeight = std::max(gridHeight, (int)(qpix.height() / scale));
+
+    QSize screenSize = this->screen()->size();
+    int cols = screenSize.width() / (gridWidth);
+    int rows = pixmaps.size() / cols + 1;
+
+    setMinimumSize(QSize(screenSize.width(), rows * (gridHeight + padY)));
+
     update();
 }
