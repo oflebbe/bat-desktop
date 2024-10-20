@@ -3,20 +3,17 @@ Batdetect Desktop Program
 Dependencies
 
 Qt6 https://www.qt.io/product/qt6
-{fmt} https://fmt.dev/
-fftw  https://fftw.org/
 
 Debian: 
-apt install libfmt-dev qt6-base-dev libfftw3-dev
-apt install build-essential g++ cmake pkgconf-bin
+apt install qt6-base-dev build-essential cmake g++
 
 
 Homebrew 
+brew install qt6 cmake 
 
 
 Windows
+Install the Qt6 Developer 
 
 
 Layout:
-minWidth = max( width of Screen (raw) , width of Pixmap)
-pro Zeile : minWidth- sum( images) > 0 

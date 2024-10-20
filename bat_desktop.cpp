@@ -1,6 +1,4 @@
 #include <cassert>
-#include <fstream>
-#include <fmt/core.h>
 
 #include <QApplication>
 #include <QImage>
@@ -33,7 +31,7 @@ int main(int argc, char *argv[])
     if (fi.suffix() == "raw")
     {
       long size = 0;
-      uint16_t *raw_file = (uint16_t *) flo_readfile( fi.filesystemFilePath().c_str(), &size);
+      uint16_t *raw_file = (uint16_t *) flo_readfile( fi.filesystemFilePath().string().c_str(), &size);
       if (!raw_file) {
         continue;
       }

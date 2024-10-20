@@ -1,7 +1,6 @@
 #include "renderarea.h"
 #include <QPainter>
 #include <QWindow>
-#include <algorithm>
 
 const int padX = 20;
 const int padY = 20;
@@ -17,7 +16,6 @@ RenderArea::RenderArea(QWidget *parent)
 
 void RenderArea::paintEvent(QPaintEvent * /* event */)
 {
-
     if (pixmaps.size() == 0)
     {
         return;

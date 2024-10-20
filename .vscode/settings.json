@@ -76,6 +76,7 @@
         "variant": "cpp",
         "codecvt": "cpp",
         "fftw3.h": "c",
-        "flo_file.h": "c"
+        "flo_file.h": "c",
+        "qimage": "cpp"
     }
 }
