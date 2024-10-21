@@ -34,7 +34,7 @@ uint8_t *flo_readfile( const char filename[static 1], long *sz)
     fclose(fin);
     return NULL;
   }
-  uint8_t *filebuf = calloc( 1, pos);
+  uint8_t *filebuf = calloc( pos, 1);
   if (!filebuf) {
     fclose(fin);
     return NULL;

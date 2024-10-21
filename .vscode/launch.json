@@ -9,7 +9,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/build/bat_desktop",
-        "args": ["${workspaceFolder}/bats"],
+        "args": ["/media/olaf/BAT/bat034/"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],

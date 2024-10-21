@@ -26,7 +26,7 @@ void RenderArea::paintEvent(QPaintEvent * /* event */)
     painter.setPen(palette().dark().color());
     painter.setBrush(Qt::NoBrush);
 
-    int cols = screen->size().width() / (gridWidth);
+    int cols = std::max( screen->size().width() / (gridWidth), 1);
 
     for (size_t j = 0; j < pixmaps.size(); j++)
     {
@@ -48,10 +48,12 @@ void RenderArea::addImage(const QImage &image)
     gridHeight = std::max(gridHeight, (int)(qpix.height() / scale));
 
     QSize screenSize = this->screen()->size();
-    int cols = screenSize.width() / (gridWidth);
+
+    int cols = std::max(screenSize.width() / (gridWidth),1);
+
     int rows = pixmaps.size() / cols + 1;
 
-    setMinimumSize(QSize(screenSize.width(), rows * (gridHeight + padY)));
+    setMinimumSize(QSize( gridWidth, rows * (gridHeight + padY)));
 
     update();
 }
