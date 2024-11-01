@@ -19,7 +19,7 @@ qt_standard_project_setup()
 
 add_compile_options("-Wall" )
 
-qt_add_executable(bat_desktop bat_desktop.cpp create_image.h window.h window.cpp renderarea.h renderarea.cpp  create_image_meow.c flo_pixmap.h flo_file.h)
+qt_add_executable(bat_desktop bat_desktop.cpp create_image.h window.h window.cpp renderarea.h renderarea.cpp  create_image_meow.c create_image_cross.c flo_pixmap.h flo_file.h)
 target_link_libraries(bat_desktop PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
 # target_link_libraries(bat_desktop PRIVATE Threads::Threads)
 

@@ -19,8 +19,11 @@
 #define M_PI 3.1415926
 #endif
 
-flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], int fft_size, float overlap_percent)
+flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, long end, int fft_size, float overlap_percent)
 {
+  if (start < 0 || end < start || end > bufsize) {
+    return NULL;
+  }
   float *fft_in = malloc(fft_size * sizeof(float));
   Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex ));
   size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
@@ -42,8 +45,13 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], int fft_size, f
     window[i] = a0 - (1.0 - a0) * cosf(2 * M_PI * i / (fft_size - 1));
   }
 
+  long fft_end = end + fft_size;
+  if (fft_end > bufsize) {
+    fft_end = bufsize - 1;
+    end = fft_end - fft_size;
+  }
   const int off = fft_size * (1.f - overlap_percent);
-  const int width = (bufsize - fft_size) / off;
+  const int width = (end -start) / off;
   const int height = fft_size / 2;
 
   // start 15kHz
@@ -55,7 +63,7 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], int fft_size, f
 
   for (int col = 0; col < width; col++)
   {
-    int i = col * off;
+    int i = (col + start)* off;
     for (int j = 0; j < fft_size; j++)
     {
       assert(i + j < bufsize);
@@ -88,3 +96,5 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], int fft_size, f
   free(window);
   return pixmap;
 }
+
+

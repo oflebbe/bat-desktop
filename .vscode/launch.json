@@ -4,12 +4,13 @@
     // Weitere Informationen finden Sie unter https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        
       {
         "name": "(gdb) Starten",
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/build/bat_desktop",
-        "args": ["/media/olaf/BAT/bat034/"],
+        "args": ["/media/olaf/BAT/bat034/capture00000.raw"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],
