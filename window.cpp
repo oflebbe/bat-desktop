@@ -29,23 +29,7 @@ Window::Window(const char filename[])
 
   setWindowTitle(tr("BAT Desktop"));
   size = 0;
-  FILE *fp = fopen( filename, "r");
-  if (!fp) {
-    return;
-  }
-  raw_file = (uint16_t *)flo_mapfile(fp, &size);
-  fclose(fp);
-  if (!raw_file)
-  {
-    return;
-  }
 
-  size /= 2;
-  if (size % 2 == 1)
-  {
-    raw_file = NULL;
-    return;
-  }
   showContent();
 }
 
@@ -82,7 +66,7 @@ void Window::showContent() {
   }
   QImage qimage_r((uchar *)pixmap_r->buf, pixmap_r->width, pixmap_r->height, QImage::Format_RGB16, free, pixmap_r);
   renderArea->addImage(qimage_r);
-  /*
+/*
   flo_pixmap_t *pixmap_c = create_image_cross(stereo_size, audio_l, audio_r, 512, overlap_percent);
   free(audio_l);
   free(audio_r);
@@ -114,7 +98,7 @@ void Window::resizeEvent(QResizeEvent *e)
 void Window::setRange(long start, long end)
 {
   
-  this->start = start / ;
+  this->start = start / 1;
   this->end = end;
   showContent();
 }
