@@ -30,7 +30,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define WINDOW_WIDTH 2000
+#define WINDOW_WIDTH 10000
 #define WINDOW_HEIGHT 256
 
 #define STEREO 1
@@ -66,7 +66,7 @@ GLuint generate_image(int width, int height)
     // During init, enable debug output
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
-    const char filename[] = "/run/media/olaf/BAT/bat034/capture00000.raw";
+    const char filename[] = "/home/olaf/bat034/capture00000.raw";
     FILE *fp = fopen(filename, "r");
     if (!fp)
     {

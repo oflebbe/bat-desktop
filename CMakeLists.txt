@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.16)
 project(bat_desktop LANGUAGES  C)
 
 
-set(CMAKE_C_FLAGS_RELEASE "-O3" )
-set(CMAKE_C_FLAGS_DEBUG "-g -fsanitize=address -fsanitize=leak -fsanitize=undefined -fsanitize-address-use-after-scope" )
+set(CMAKE_C_FLAGS_RELEASE "-O3 -fopenmp" )
+set(CMAKE_C_FLAGS_DEBUG "-g -fopenmp -fsanitize=address -fsanitize=leak -fsanitize=undefined -fsanitize-address-use-after-scope" )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
