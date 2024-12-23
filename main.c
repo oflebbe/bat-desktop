@@ -8,10 +8,8 @@
 #include <assert.h>
 #include <limits.h>
 #include <time.h>
-
+#include <threads.h>
 #include <GL/glew.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
@@ -20,6 +18,7 @@
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
+#define NK_INCLUDE_STANDARD_BOOL
 #define NK_IMPLEMENTATION
 #define NK_SDL_GL3_IMPLEMENTATION
 #include "nuklear.h"
@@ -27,10 +26,12 @@
 
 #include "create_image.h"
 #include "flo_file.h"
+#define FLO_QUEUE_IMPLEMENTATION
+#include "flo_queue.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define WINDOW_WIDTH 10000
+#define WINDOW_WIDTH 1000
 #define WINDOW_HEIGHT 256
 
 #define STEREO 1
@@ -52,40 +53,15 @@ MessageCallback(GLenum source,
             type, severity, message);
 }
 
-void RGB565_to_RGB888(uint16_t rgb565, uint8_t *r, uint8_t *g, uint8_t *b)
+typedef struct results
 {
-    // Extrahiere die Rot-, Grün- und Blau-Komponenten aus dem RGB565-Wert
-    *r = ((rgb565 >> 11) & 0x1F) << 3; // Rot: 5 Bits, auf 8 Bits erweitern
-    *g = ((rgb565 >> 5) & 0x3F) << 2;  // Grün: 6 Bits, auf 8 Bits erweitern
-    *b = (rgb565 & 0x1F) << 3;         // Blau: 5 Bits, auf 8 Bits erweitern
-}
+    flo_pixmap_t *pixmap_l;
+    flo_pixmap_t *pixmap_r;
+} result_t;
 
 // Function to generate a simple image (random colors)
-GLuint generate_image(int width, int height)
+result_t *generate_image(long size, const uint16_t raw_file[size], long start, int width)
 {
-    // During init, enable debug output
-    glEnable(GL_DEBUG_OUTPUT);
-    glDebugMessageCallback(MessageCallback, 0);
-    const char filename[] = "/home/olaf/bat034/capture00000.raw";
-    FILE *fp = fopen(filename, "r");
-    if (!fp)
-    {
-        return 0;
-    }
-    size_t size;
-    uint16_t *raw_file = (uint16_t *)flo_mapfile(fp, &size);
-    fclose(fp);
-    if (!raw_file)
-    {
-        return 0;
-    }
-
-    size /= 2;
-    if (size % 2 == 1)
-    {
-        raw_file = NULL;
-        return 0;
-    }
 
 #ifdef STEREO
     uint16_t *audio_l = malloc(size);
@@ -97,70 +73,51 @@ GLuint generate_image(int width, int height)
         audio_r[j] = raw_file[j * 2 + 1];
     }
 
-    long start = 0;
-    long end = 0;
     int fft_size = 512;
     float overlap_percent = 0.1;
+    result_t *r = calloc(1, sizeof(result_t));
 
-    if (start == 0 && end == 0)
-    {
-        end = stereo_size / 10;
-    }
-    flo_pixmap_t *pixmap_l = create_image_meow(stereo_size, audio_l, start, width, fft_size, overlap_percent);
-    if (!pixmap_l)
-    {
-        return 0;
-    }
-    /*  QImage qimage_l((uchar *)pixmap_l->buf, pixmap_l->width, pixmap_l->height, QImage::Format_RGB16, free, pixmap_l);
-      renderArea->addImage(qimage_l);
 
-      flo_pixmap_t *pixmap_r = create_image_meow(stereo_size, audio_r, start, end, fft_size, overlap_percent);
-      if (!pixmap_r)
-      {
-          return;
-      } */
-    // QImage qimage_r((uchar *)pixmap_r->buf, pixmap_r->width, pixmap_r->height, QImage::Format_RGB16, free, pixmap_r);
-    // renderArea->addImage(qimage_r);
-/*
-  flo_pixmap_t *pixmap_c = create_image_cross(stereo_size, audio_l, audio_r, 512, overlap_percent);
-  free(audio_l);
-  free(audio_r);
-  if (!pixmap_c)
-  {
-    continue;
-  }
-  QImage qimage_c((uchar *)pixmap_c->buf, pixmap_c->width, pixmap_c->height, QImage::Format_RGB16, free, pixmap_c);
-  qwindow.addImage(qimage_c);
-*/
-#else
-    flo_pixmap_t *pixmap = create_image_meow(stereo_size, raw_file, 512, overlap_percent);
-    if (!pixmap)
-    {
-        continue;
-    }
-    QImage qimage((uchar *)pixmap->buf, pixmap->width, pixmap->height, QImage::Format_RGB16, free, pixmap);
-    qwindow.addImage(qimage);
-#endif
+    r->pixmap_l = create_image_meow(stereo_size, audio_l, start, width, fft_size, overlap_percent);
     free(audio_l);
+
+    r->pixmap_r = create_image_meow(stereo_size, audio_r, start, width, fft_size, overlap_percent);
     free(audio_r);
+#endif
+    return r;
+}
 
-    GLuint tex_l;
-   /* size_t sz = (long)pixmap_l->width * (long)pixmap_l->height;
-    uint8_t *rgbbuffer = malloc(sz * 3);
-    for (long i = 0; i < sz; i++)
+typedef struct bg_parameters
+{
+    long size;
+    uint16_t *raw_file;
+    long start;
+    int width;
+    long new_start;
+} bg_t;
+
+typedef struct queues {
+    flo_queue_t *input;
+    flo_queue_t *output;
+} queues_t;
+
+int bg_func(void *queues)
+{
+    queues_t *q = (queues_t *) queues;
+    while (1)
     {
-        RGB565_to_RGB888(pixmap_l->buf[i], &rgbbuffer[i * 3], &rgbbuffer[i * 3 + 1], &rgbbuffer[i * 3 + 2]);
+        bg_t params;
+        bg_t *p = flo_queue_pop_block(q->input, &params);
+        if (!p)
+        {
+            return 0;
+        }
+        result_t *r = generate_image(p->size, p->raw_file, p->start, p->width); // Generate an image
+        flo_queue_push_block( q->output, r);
+        free(r);
     }
-*/
-    //stbi_write_png("data.png", pixmap_l->width, pixmap_l->height, 3, rgbbuffer, pixmap_l->width);
-    glGenTextures(1, &tex_l);
-    glBindTexture(GL_TEXTURE_2D, tex_l);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pixmap_l->width, pixmap_l->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, pixmap_l->buf);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    return tex_l;
+    flo_queue_free(q->input);
+    flo_queue_close(q->output);
 }
 
 /* ===============================================================
@@ -173,8 +130,37 @@ int main(int argc, char *argv[])
     /* Platform */
     SDL_Window *win;
     SDL_GLContext glContext;
+
     int win_width, win_height;
     int running = 1;
+    if (argc < 2)
+    {
+        fprintf(stderr, "Need 1 filename argument\n");
+        exit(1);
+    }
+
+    FILE *fp = fopen(argv[1], "r");
+    if (!fp)
+    {
+        fprintf(stderr, "could not open %s\n", argv[1]);
+        exit(1);
+    }
+    size_t size;
+    uint16_t *raw_file = (uint16_t *)flo_mapfile(fp, &size);
+    fclose(fp);
+    if (!raw_file)
+    {
+        fprintf(stderr, "could not map %s\n", argv[1]);
+        exit(1);
+    }
+
+    size /= 2;
+    if (size % 2 == 1)
+    {
+        raw_file = NULL;
+        fprintf(stderr, "could not map %s\n", argv[1]);
+        exit(1);
+    }
 
     /* GUI */
     struct nk_context *ctx;
@@ -185,6 +171,9 @@ int main(int argc, char *argv[])
 
     /* SDL setup */
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+    // Prevent DBus memory leak
+    SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
@@ -197,7 +186,6 @@ int main(int argc, char *argv[])
                            WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
     SDL_GetWindowSize(win, &win_width, &win_height);
-
     /* OpenGL setup */
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     glewExperimental = 1;
@@ -225,8 +213,32 @@ int main(int argc, char *argv[])
     }
 
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
+    // During init, enable debug output
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(MessageCallback, 0);
 
-    GLuint image_texture = generate_image(WINDOW_WIDTH, 256); // Generate an image
+    GLuint textures[2];
+    // stbi_write_png("data.png", pixmap_l->width, pixmap_l->height, 3, rgbbuffer, pixmap_l->width);
+    glGenTextures(2, textures);
+
+    glBindTexture(GL_TEXTURE_2D, textures[0]);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB8, WINDOW_WIDTH, WINDOW_HEIGHT);
+    glBindTexture(GL_TEXTURE_2D, textures[1]);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB8, WINDOW_WIDTH, WINDOW_HEIGHT);
+    long start = 0;
+    bg_t params = {
+        .size = size,
+        .raw_file = raw_file,
+        .start = start,
+        .width = WINDOW_WIDTH};
+
+    thrd_t bg_thread;
+    queues_t queues = {0};
+    queues.input = flo_queue_create(1, sizeof(bg_t));
+    queues.output = flo_queue_create(1, sizeof(result_t));
+    
+    thrd_create(&bg_thread, bg_func, &queues);
+    flo_queue_push_block(queues.input, &params);
     while (running)
     {
         /* Input */
@@ -241,16 +253,56 @@ int main(int argc, char *argv[])
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
 
-        /* GUI */
+        if (ctx->input.keyboard.keys[NK_KEY_LEFT].down)
+        {
+            printf("LEFT\n");
+            start -= 512;
+            if (start < 0)
+            {
+                start = 0;
+            }
+            params.start = start;
+            flo_queue_push_block(queues.input, &params);
+        }
+        else if (ctx->input.keyboard.keys[NK_KEY_RIGHT].down)
+        {
+            start += 512;
+            if (start < 0)
+            {
+                start = 0;
+            }
+            printf("RIGHT\n");
+            params.start = start;
+            flo_queue_push_block(queues.input, &params);
+        }
+        printf(".");
+        fflush(stdout);
 
+        if (!flo_queue_empty(queues.output))
+        {
+            result_t res;
+            result_t *result = flo_queue_pop_block(queues.output, &res);
+
+            glBindTexture(GL_TEXTURE_2D, textures[0]);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, result->pixmap_l->width, result->pixmap_l->height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_l->buf);
+
+            free(result->pixmap_l);
+
+            glBindTexture(GL_TEXTURE_2D, textures[1]);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, result->pixmap_r->width, result->pixmap_r->height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_r->buf);
+            free(result->pixmap_r);
+        }
+        /* GUI */
         // Start a new UI frame
-        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT+40),
+        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 2 + 40),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
             nk_layout_row_dynamic(ctx, 256, 1);
             // Use nk_image to display the texture
-            nk_image(ctx, nk_image_id(image_texture)); // This will render the full texture
+            nk_image(ctx, nk_image_id(textures[0])); // This will render the full texture
+            nk_image(ctx, nk_image_id(textures[1])); // This will render the full texture
         }
+
         nk_end(ctx);
 
         /* Draw */

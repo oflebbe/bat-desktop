@@ -78,6 +78,7 @@
         "fftw3.h": "c",
         "flo_file.h": "c",
         "qimage": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "math.h": "c"
     }
 }

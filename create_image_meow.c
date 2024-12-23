@@ -38,7 +38,7 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, int
   }
 
   flo_pixmap_t *pixmap = flo_pixmap_create(width_px, height);
-  #pragma omp parallel
+#pragma omp parallel
   {
     float *fft_in = malloc(fft_size * sizeof(float));
     Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
@@ -72,7 +72,7 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, int
     {
       int i = col * off + start;
       for (int j = 0; j < fft_size; j++)
-      {
+      { 
         assert(i + j < bufsize);
         fft_in[j] = (buffer[i + j] - 2048) * window[j];
       }
