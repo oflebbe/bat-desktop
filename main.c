@@ -77,7 +77,6 @@ result_t *generate_image(long size, const uint16_t raw_file[size], long start, i
     float overlap_percent = 0.1;
     result_t *r = calloc(1, sizeof(result_t));
 
-
     r->pixmap_l = create_image_meow(stereo_size, audio_l, start, width, fft_size, overlap_percent);
     free(audio_l);
 
@@ -96,14 +95,15 @@ typedef struct bg_parameters
     long new_start;
 } bg_t;
 
-typedef struct queues {
+typedef struct queues
+{
     flo_queue_t *input;
     flo_queue_t *output;
 } queues_t;
 
 int bg_func(void *queues)
 {
-    queues_t *q = (queues_t *) queues;
+    queues_t *q = (queues_t *)queues;
     while (1)
     {
         bg_t params;
@@ -113,7 +113,7 @@ int bg_func(void *queues)
             return 0;
         }
         result_t *r = generate_image(p->size, p->raw_file, p->start, p->width); // Generate an image
-        flo_queue_push_block( q->output, r);
+        flo_queue_push_block(q->output, r);
         free(r);
     }
     flo_queue_free(q->input);
@@ -236,14 +236,21 @@ int main(int argc, char *argv[])
     queues_t queues = {0};
     queues.input = flo_queue_create(1, sizeof(bg_t));
     queues.output = flo_queue_create(1, sizeof(result_t));
-    
+
     thrd_create(&bg_thread, bg_func, &queues);
     flo_queue_push_block(queues.input, &params);
+    bool next_wait = false;
     while (running)
     {
         /* Input */
         SDL_Event evt;
         nk_input_begin(ctx);
+        if (next_wait)
+        {
+            SDL_WaitEvent(&evt);
+            nk_sdl_handle_event(&evt);
+            next_wait = false;
+        }
         while (SDL_PollEvent(&evt))
         {
             if (evt.type == SDL_QUIT)
@@ -253,30 +260,28 @@ int main(int argc, char *argv[])
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
 
-        if (ctx->input.keyboard.keys[NK_KEY_LEFT].down)
+        if (nk_input_is_key_pressed(&ctx->input, NK_KEY_LEFT))
         {
-            printf("LEFT\n");
-            start -= 512;
+            start -= size / 100;
             if (start < 0)
             {
                 start = 0;
             }
             params.start = start;
             flo_queue_push_block(queues.input, &params);
+            next_wait = false;
         }
-        else if (ctx->input.keyboard.keys[NK_KEY_RIGHT].down)
+        else if (nk_input_is_key_pressed(&ctx->input, NK_KEY_RIGHT))
         {
-            start += 512;
-            if (start < 0)
+            start += size / 100;
+            if (start > size)
             {
-                start = 0;
+                start = size;
             }
-            printf("RIGHT\n");
             params.start = start;
             flo_queue_push_block(queues.input, &params);
+            next_wait = false;
         }
-        printf(".");
-        fflush(stdout);
 
         if (!flo_queue_empty(queues.output))
         {
