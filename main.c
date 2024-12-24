@@ -19,16 +19,12 @@
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_BOOL
-#define NK_IMPLEMENTATION
-#define NK_SDL_GL3_IMPLEMENTATION
 #include "nuklear.h"
 #include "nuklear_sdl_gl3.h"
 
 #include "create_image.h"
 #include "flo_file.h"
-#define FLO_QUEUE_IMPLEMENTATION
 #include "flo_queue.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
 #define WINDOW_WIDTH 1000
@@ -110,14 +106,14 @@ int bg_func(void *queues)
         bg_t *p = flo_queue_pop_block(q->input, &params);
         if (!p)
         {
+            flo_queue_free(q->input);
+            flo_queue_close(q->output);
             return 0;
         }
         result_t *r = generate_image(p->size, p->raw_file, p->start, p->width); // Generate an image
         flo_queue_push_block(q->output, r);
         free(r);
     }
-    flo_queue_free(q->input);
-    flo_queue_close(q->output);
 }
 
 /* ===============================================================
@@ -248,18 +244,36 @@ int main(int argc, char *argv[])
         if (next_wait)
         {
             SDL_WaitEvent(&evt);
+            if (evt.type == SDL_QUIT)
+            {
+                flo_queue_close(queues.input);
+                thrd_join(bg_thread, NULL);
+                result_t res;
+                while (NULL != flo_queue_pop_block(queues.output, &res))
+                {
+                };
+                flo_queue_free(queues.output);
+                goto cleanup;
+            }
             nk_sdl_handle_event(&evt);
-            next_wait = false;
         }
         while (SDL_PollEvent(&evt))
         {
             if (evt.type == SDL_QUIT)
+            {
+                flo_queue_close(queues.input);
+                thrd_join(bg_thread, NULL);
+                result_t res;
+                while (NULL != flo_queue_pop_block(queues.output, &res))
+                {
+                };
+                flo_queue_free(queues.output);
                 goto cleanup;
+            }
             nk_sdl_handle_event(&evt);
         }
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
-
         if (nk_input_is_key_pressed(&ctx->input, NK_KEY_LEFT))
         {
             start -= size / 100;
@@ -287,6 +301,7 @@ int main(int argc, char *argv[])
         {
             result_t res;
             result_t *result = flo_queue_pop_block(queues.output, &res);
+            next_wait = true;
 
             glBindTexture(GL_TEXTURE_2D, textures[0]);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, result->pixmap_l->width, result->pixmap_l->height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_l->buf);

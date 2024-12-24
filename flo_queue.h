@@ -26,6 +26,9 @@ void flo_queue_push_block(flo_queue_t *queue, void *el);
 // no more elements to be written
 void flo_queue_close(flo_queue_t *queue);
 
+// checks if there is smthg in the queue or not
+bool flo_queue_empty(flo_queue_t *queue);
+
 /* ------------------------------------------------------------------------- */
 #ifdef FLO_QUEUE_IMPLEMENTATION
 
@@ -140,7 +143,7 @@ void *flo_queue_pop_block(flo_queue_t *queue, void *result)
     } while (true);
 }
 
-// returns ptr to element (result)
+// checks if there is smthg in the queue or not
 bool flo_queue_empty(flo_queue_t *queue)
 {
     assert(queue);
