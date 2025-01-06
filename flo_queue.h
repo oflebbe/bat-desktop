@@ -40,16 +40,17 @@ bool flo_queue_empty(flo_queue_t *queue);
 typedef struct flo_queue
 {
     mtx_t lock;
-    cnd_t condition_empty; // not empty
-    cnd_t condition_full;  // not full
+    cnd_t condition_less; // condition to have less elements
+    cnd_t condition_more; // condition to have more elements
     int n_elements;
     int element_count;
     int element_size;
+    int next_in;
+    int next_out;
     // ptr to element_size * n_elements sized field
     void *elements;
     bool closed;
 } flo_queue_t;
-
 
 // initializes queue with n_elements capacity
 flo_queue_t *flo_queue_create(int n_elements, size_t element_size)
@@ -61,9 +62,11 @@ flo_queue_t *flo_queue_create(int n_elements, size_t element_size)
     queue->element_size = element_size;
     queue->element_count = 0;
     queue->n_elements = n_elements;
+    queue->next_in = 0;
+    queue->next_out = 0;
     mtx_init(&queue->lock, mtx_plain);
-    cnd_init(&queue->condition_full);
-    cnd_init(&queue->condition_empty);
+    cnd_init(&queue->condition_less);
+    cnd_init(&queue->condition_more);
     queue->closed = false;
     return queue;
 }
@@ -74,8 +77,8 @@ void flo_queue_free(flo_queue_t *queue)
     assert(queue);
     assert(queue->elements);
     mtx_destroy(&queue->lock);
-    cnd_destroy(&queue->condition_full);
-    cnd_destroy(&queue->condition_empty);
+    cnd_destroy(&queue->condition_less);
+    cnd_destroy(&queue->condition_more);
     free(queue->elements);
     free(queue);
 }
@@ -94,7 +97,7 @@ void flo_queue_close(flo_queue_t *queue)
 {
     queue->closed = true;
     // not empty any more, make workers read
-    cnd_broadcast(&queue->condition_empty);
+    cnd_broadcast(&queue->condition_more);
 }
 
 // returns ptr to element (result)
@@ -109,34 +112,29 @@ void *flo_queue_pop_block(flo_queue_t *queue, void *result)
     {
         if (queue->element_count > 0)
         {
-            void *ptr = flo_queue_ptr_to_element(queue, 0);
+            void *ptr = flo_queue_ptr_to_element(queue, queue->next_out++);
             memcpy(result, ptr, queue->element_size);
-            if (queue->element_count > 1)
-            {
-                void *next = flo_queue_ptr_to_element(queue, 1);
-                memcpy(ptr, next, queue->element_size * (queue->element_count - 1));
-            }
+            queue->next_out %= queue->n_elements;
             queue->element_count--;
-
+            cnd_signal(&queue->condition_less);
             if (thrd_success != mtx_unlock(&queue->lock))
             {
                 abort();
             }
-            // not full any more
-            cnd_signal(&queue->condition_full);
+
             return result;
         }
         else if (queue->closed)
         {
-
+            cnd_signal(&queue->condition_less);
             if (thrd_success != mtx_unlock(&queue->lock))
             {
                 abort();
             }
             return NULL;
         }
-        // wait for not empty
-        if (thrd_success != cnd_wait(&queue->condition_empty, &queue->lock))
+        // wait for more to arrive
+        if (thrd_success != cnd_wait(&queue->condition_more, &queue->lock))
         {
             abort();
         }
@@ -169,29 +167,25 @@ void flo_queue_push_block(flo_queue_t *queue, void *el)
     }
     do
     {
-        if (queue->closed)
-        {
-            if (thrd_success != mtx_unlock(&queue->lock))
-            {
-                abort();
-            }
-            return;
-        }
+        assert(!queue->closed);
+
         if (queue->element_count < queue->n_elements)
         {
-            void *ptr = flo_queue_ptr_to_element(queue, queue->element_count++);
+            void *ptr = flo_queue_ptr_to_element(queue, queue->next_in++);
             memcpy(ptr, el, queue->element_size);
+            queue->element_count++;
+            queue->next_in %= queue->n_elements;
+            cnd_signal(&queue->condition_more);
 
             if (thrd_success != mtx_unlock(&queue->lock))
             {
                 abort();
             }
-            // not empty any more
-            cnd_signal(&queue->condition_empty);
+
             return;
         }
-        // wait for not full any more
-        if (thrd_success != cnd_wait(&queue->condition_full, &queue->lock))
+        // wait for not full any more^
+        if (thrd_success != cnd_wait(&queue->condition_less, &queue->lock))
         {
             abort();
         }

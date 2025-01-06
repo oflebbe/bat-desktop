@@ -27,7 +27,7 @@
 #include "flo_queue.h"
 #include "stb_image_write.h"
 
-#define WINDOW_WIDTH 1000
+#define WINDOW_WIDTH 2000
 #define WINDOW_HEIGHT 256
 
 #define STEREO 1
@@ -217,10 +217,6 @@ int main(int argc, char *argv[])
     // stbi_write_png("data.png", pixmap_l->width, pixmap_l->height, 3, rgbbuffer, pixmap_l->width);
     glGenTextures(2, textures);
 
-    glBindTexture(GL_TEXTURE_2D, textures[0]);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB8, WINDOW_WIDTH, WINDOW_HEIGHT);
-    glBindTexture(GL_TEXTURE_2D, textures[1]);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB8, WINDOW_WIDTH, WINDOW_HEIGHT);
     long start = 0;
     bg_t params = {
         .size = size,
@@ -232,6 +228,7 @@ int main(int argc, char *argv[])
     queues_t queues = {0};
     queues.input = flo_queue_create(1, sizeof(bg_t));
     queues.output = flo_queue_create(1, sizeof(result_t));
+    int width = WINDOW_WIDTH;
 
     thrd_create(&bg_thread, bg_func, &queues);
     flo_queue_push_block(queues.input, &params);
@@ -241,7 +238,7 @@ int main(int argc, char *argv[])
         /* Input */
         SDL_Event evt;
         nk_input_begin(ctx);
-        if (next_wait)
+        if (false)
         {
             SDL_WaitEvent(&evt);
             if (evt.type == SDL_QUIT)
@@ -274,28 +271,6 @@ int main(int argc, char *argv[])
         }
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
-        if (nk_input_is_key_pressed(&ctx->input, NK_KEY_LEFT))
-        {
-            start -= size / 100;
-            if (start < 0)
-            {
-                start = 0;
-            }
-            params.start = start;
-            flo_queue_push_block(queues.input, &params);
-            next_wait = false;
-        }
-        else if (nk_input_is_key_pressed(&ctx->input, NK_KEY_RIGHT))
-        {
-            start += size / 100;
-            if (start > size)
-            {
-                start = size;
-            }
-            params.start = start;
-            flo_queue_push_block(queues.input, &params);
-            next_wait = false;
-        }
 
         if (!flo_queue_empty(queues.output))
         {
@@ -304,14 +279,53 @@ int main(int argc, char *argv[])
             next_wait = true;
 
             glBindTexture(GL_TEXTURE_2D, textures[0]);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, result->pixmap_l->width, result->pixmap_l->height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_l->buf);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, result->pixmap_l->width, result->pixmap_l->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_l->buf);
 
             free(result->pixmap_l);
+            result->pixmap_l = NULL;
 
             glBindTexture(GL_TEXTURE_2D, textures[1]);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, result->pixmap_r->width, result->pixmap_r->height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_r->buf);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, result->pixmap_r->width, result->pixmap_r->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_r->buf);
             free(result->pixmap_r);
+            result->pixmap_r = NULL;
         }
+
+        if (nk_input_is_key_pressed(&ctx->input, NK_KEY_LEFT))
+        {
+            start -= size / 100;
+            if (start < 0)
+            {
+                start = 0;
+            }
+            bg_t new_params = params;
+            new_params.start = start;
+            new_params.width = width;
+            flo_queue_push_block(queues.input, &new_params);
+            next_wait = false;
+            continue;
+        }
+        else if (nk_input_is_key_pressed(&ctx->input, NK_KEY_RIGHT))
+        {
+            start += size / 100;
+            if (start > size)
+            {
+                start = size;
+            }
+            bg_t new_params = params;
+            new_params.start = start;
+            new_params.width = width;
+            flo_queue_push_block(queues.input, &new_params);
+            next_wait = false;
+            continue;
+        }
+
+        
         /* GUI */
         // Start a new UI frame
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 2 + 40),
@@ -321,6 +335,8 @@ int main(int argc, char *argv[])
             // Use nk_image to display the texture
             nk_image(ctx, nk_image_id(textures[0])); // This will render the full texture
             nk_image(ctx, nk_image_id(textures[1])); // This will render the full texture
+            struct nk_vec2 sz = nk_window_get_size(ctx);
+            width = sz.x;
         }
 
         nk_end(ctx);
