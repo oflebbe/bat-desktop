@@ -9,7 +9,6 @@
 #define FLO_PIXMAP_IMPLEMENTATION
 #include "flo_pixmap.h"
 
-#define FLO_FILE_IMPLEMENTATION
 #include "flo_file.h"
 #include "create_image.h"
 #define MEOW_FFT_IMPLEMENTATION
@@ -19,10 +18,9 @@
 #define M_PI 3.1415926
 #endif
 
-flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, int width_px, int fft_size, float overlap_percent)
+flo_pixmap_t *  create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent)
 {
-  if (start < 0 || width_px < 0)
-  {
+  if (offset < 0 || scale < 0 || offset >= scale) {
     return NULL;
   }
   const int height = fft_size / 2;
@@ -37,31 +35,21 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, int
     window[i] = a0 - (1.0 - a0) * cosf(2 * M_PI * i / (fft_size - 1));
   }
 
-  flo_pixmap_t *pixmap = flo_pixmap_create(width_px, height);
+  // last valid index
+  const int end =  bufsize /scale - fft_size;
+  const int off = fft_size * (1.f - overlap_percent);
+  const int width_px = end / off;
+
+  flo_pixmap_t *pixmap = flo_pixmap_create( width_px, height);
 #pragma omp parallel
   {
     float *fft_in = malloc(fft_size * sizeof(float));
     Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
+
     size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
     meow_fft_generate_workset_real(fft_size, fft_real);
-
-    if (!fft_out || !fft_in)
-    {
-      free(fft_out);
-      free(fft_in);
-    }
-
-    const int off = fft_size * (1.f - overlap_percent);
-
-    size_t end = width_px * off + start;
-    size_t fft_end = end + fft_size;
-    if (fft_end > bufsize)
-    {
-      fft_end = bufsize - 1;
-      end = fft_end - fft_size;
-    }
 
     // start 15kHz
     // 0 - 125 kHz -> 512 Px
@@ -70,15 +58,15 @@ flo_pixmap_t *create_image_meow(long bufsize, uint16_t buffer[], long start, int
 #pragma omp for
     for (int col = 0; col < width_px; col++)
     {
-      int i = col * off + start;
+      int i = (col * off);
       for (int j = 0; j < fft_size; j++)
       { 
-        assert(i + j < bufsize);
-        fft_in[j] = (buffer[i + j] - 2048) * window[j];
+        const int index = scale * (i+j) + offset;
+        assert(index < bufsize);
+        // subtract 2048 for 12 bit sampling i.e. from 0 .. 4096 
+        fft_in[j] = (buffer[index] - 2048) * window[j];
       }
       meow_fft_real(fft_real, fft_in, fft_out);
-
-      int count_more_05 = 0;
 
       for (int j = 0; j < height; j++)
       {

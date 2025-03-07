@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <time.h>
-#include <threads.h>
+#include <pthread.h>
 #include <GL/glew.h>
 
 #define NK_INCLUDE_FIXED_TYPES
@@ -23,12 +23,16 @@
 #include "nuklear_sdl_gl3.h"
 
 #include "create_image.h"
+#define FLO_FILE_IMPLEMENTATION
 #include "flo_file.h"
-#include "flo_queue.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
 
 #define WINDOW_WIDTH 2000
 #define WINDOW_HEIGHT 256
+
+#define TEXTURE_WIDTH 16384
 
 #define STEREO 1
 
@@ -55,65 +59,36 @@ typedef struct results
     flo_pixmap_t *pixmap_r;
 } result_t;
 
-// Function to generate a simple image (random colors)
-result_t *generate_image(long size, const uint16_t raw_file[size], long start, int width)
-{
+typedef struct image_params {
+    long size;
+    const uint16_t *raw_file;
+    int fft_size;
+    int offset;
+    int scale;
+    float overlap_percent;
+} image_params_t;
 
-#ifdef STEREO
-    uint16_t *audio_l = malloc(size);
-    uint16_t *audio_r = malloc(size);
-    int stereo_size = size / 2;
-    for (int j = 0; j < stereo_size / 2 - 1; j++)
-    {
-        audio_l[j] = raw_file[j * 2];
-        audio_r[j] = raw_file[j * 2 + 1];
-    }
-
-    int fft_size = 512;
-    float overlap_percent = 0.1;
-    result_t *r = calloc(1, sizeof(result_t));
-
-    r->pixmap_l = create_image_meow(stereo_size, audio_l, start, width, fft_size, overlap_percent);
-    free(audio_l);
-
-    r->pixmap_r = create_image_meow(stereo_size, audio_r, start, width, fft_size, overlap_percent);
-    free(audio_r);
-#endif
-    return r;
+void *thread_routine( void *arg ) {
+    image_params_t *params = (image_params_t *) arg;
+    return (void *) create_image_meow( params->size, params->raw_file, params->scale, params->offset, params->fft_size, params->overlap_percent);
 }
 
-typedef struct bg_parameters
+// Function to generate a simple image (random colors)
+result_t generate_image(long size, const uint16_t raw_file[size], int fft_size, float overlap_percent)
 {
-    long size;
-    uint16_t *raw_file;
-    long start;
-    int width;
-    long new_start;
-} bg_t;
+    result_t r;
 
-typedef struct queues
-{
-    flo_queue_t *input;
-    flo_queue_t *output;
-} queues_t;
+    image_params_t parms1 = {.size = size, .raw_file = raw_file, .fft_size = fft_size, .scale = 2, .offset = 0, .overlap_percent = overlap_percent};
+    pthread_t thrd1;
+    pthread_create( &thrd1, NULL, thread_routine, &parms1);
 
-int bg_func(void *queues)
-{
-    queues_t *q = (queues_t *)queues;
-    while (1)
-    {
-        bg_t params;
-        bg_t *p = flo_queue_pop_block(q->input, &params);
-        if (!p)
-        {
-            flo_queue_free(q->input);
-            flo_queue_close(q->output);
-            return 0;
-        }
-        result_t *r = generate_image(p->size, p->raw_file, p->start, p->width); // Generate an image
-        flo_queue_push_block(q->output, r);
-        free(r);
-    }
+    image_params_t parms2 = {.size = size, .raw_file = raw_file, .fft_size = fft_size, .scale = 2, .offset = 1, .overlap_percent = overlap_percent};
+    pthread_t thrd2;
+    pthread_create( &thrd2, NULL, thread_routine, &parms2);
+
+    pthread_join(thrd1, (void **) &r.pixmap_l);
+    pthread_join(thrd2, (void **) &r.pixmap_r);
+    return r;
 }
 
 /* ===============================================================
@@ -162,8 +137,7 @@ int main(int argc, char *argv[])
     struct nk_context *ctx;
     struct nk_colorf bg;
 
-    NK_UNUSED(argc);
-    NK_UNUSED(argv);
+    result_t result = generate_image(size, raw_file, 512, 0.1);
 
     /* SDL setup */
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
@@ -183,7 +157,7 @@ int main(int argc, char *argv[])
     glContext = SDL_GL_CreateContext(win);
     SDL_GetWindowSize(win, &win_width, &win_height);
     /* OpenGL setup */
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    glViewport(0, 0, result.pixmap_l->width, result.pixmap_l->height*2);
     glewExperimental = 1;
     if (glewInit() != GLEW_OK)
     {
@@ -213,26 +187,48 @@ int main(int argc, char *argv[])
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
 
-    GLuint textures[2];
-    // stbi_write_png("data.png", pixmap_l->width, pixmap_l->height, 3, rgbbuffer, pixmap_l->width);
-    glGenTextures(2, textures);
+    int num_tex_line = result.pixmap_l->width / TEXTURE_WIDTH ;
+    GLuint *textures = malloc( sizeof(GLuint) * 2 * num_tex_line );
+    
+   // stbi_write_png("data.png", result.pixmap_l->width, result.pixmap_l->height, 2, result.pixmap_l->buf, 0);
+    glGenTextures( num_tex_line * 2, textures);
 
-    long start = 0;
-    bg_t params = {
-        .size = size,
-        .raw_file = raw_file,
-        .start = start,
-        .width = WINDOW_WIDTH};
+    int height = result.pixmap_l->height;
+    for (int i= 0; i < num_tex_line; i++) {
+        glBindTexture(GL_TEXTURE_2D, textures[i]);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, result.pixmap_l->width);
+         
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, result.pixmap_l->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, 
+                &result.pixmap_l->buf[(i * TEXTURE_WIDTH)]);
 
-    thrd_t bg_thread;
-    queues_t queues = {0};
-    queues.input = flo_queue_create(1, sizeof(bg_t));
-    queues.output = flo_queue_create(1, sizeof(result_t));
-    int width = WINDOW_WIDTH;
+            
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    }
 
-    thrd_create(&bg_thread, bg_func, &queues);
-    flo_queue_push_block(queues.input, &params);
+    free(result.pixmap_l);
+    result.pixmap_l = NULL;
+
+    for (int i= 0; i < num_tex_line; i++) {
+        glBindTexture(GL_TEXTURE_2D, textures[i+num_tex_line]);
+       // glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, result.pixmap_r->width);
+      
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, result.pixmap_r->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, 
+            &result.pixmap_r->buf[(i * TEXTURE_WIDTH)]);
+
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    }
+    free(result.pixmap_r);
+    result.pixmap_r = NULL;
+
     bool next_wait = false;
+    
     while (running)
     {
         /* Input */
@@ -243,13 +239,6 @@ int main(int argc, char *argv[])
             SDL_WaitEvent(&evt);
             if (evt.type == SDL_QUIT)
             {
-                flo_queue_close(queues.input);
-                thrd_join(bg_thread, NULL);
-                result_t res;
-                while (NULL != flo_queue_pop_block(queues.output, &res))
-                {
-                };
-                flo_queue_free(queues.output);
                 goto cleanup;
             }
             nk_sdl_handle_event(&evt);
@@ -258,13 +247,6 @@ int main(int argc, char *argv[])
         {
             if (evt.type == SDL_QUIT)
             {
-                flo_queue_close(queues.input);
-                thrd_join(bg_thread, NULL);
-                result_t res;
-                while (NULL != flo_queue_pop_block(queues.output, &res))
-                {
-                };
-                flo_queue_free(queues.output);
                 goto cleanup;
             }
             nk_sdl_handle_event(&evt);
@@ -272,71 +254,28 @@ int main(int argc, char *argv[])
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
 
-        if (!flo_queue_empty(queues.output))
-        {
-            result_t res;
-            result_t *result = flo_queue_pop_block(queues.output, &res);
-            next_wait = true;
-
-            glBindTexture(GL_TEXTURE_2D, textures[0]);
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, result->pixmap_l->width, result->pixmap_l->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_l->buf);
-
-            free(result->pixmap_l);
-            result->pixmap_l = NULL;
-
-            glBindTexture(GL_TEXTURE_2D, textures[1]);
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, result->pixmap_r->width, result->pixmap_r->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, result->pixmap_r->buf);
-            free(result->pixmap_r);
-            result->pixmap_r = NULL;
-        }
-
-        if (nk_input_is_key_pressed(&ctx->input, NK_KEY_LEFT))
-        {
-            start -= size / 100;
-            if (start < 0)
-            {
-                start = 0;
-            }
-            bg_t new_params = params;
-            new_params.start = start;
-            new_params.width = width;
-            flo_queue_push_block(queues.input, &new_params);
-            next_wait = false;
-            continue;
-        }
-        else if (nk_input_is_key_pressed(&ctx->input, NK_KEY_RIGHT))
-        {
-            start += size / 100;
-            if (start > size)
-            {
-                start = size;
-            }
-            bg_t new_params = params;
-            new_params.start = start;
-            new_params.width = width;
-            flo_queue_push_block(queues.input, &new_params);
-            next_wait = false;
-            continue;
-        }
-
-        
         /* GUI */
         // Start a new UI frame
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 2 + 40),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
-            nk_layout_row_dynamic(ctx, 256, 1);
             // Use nk_image to display the texture
-            nk_image(ctx, nk_image_id(textures[0])); // This will render the full texture
-            nk_image(ctx, nk_image_id(textures[1])); // This will render the full texture
+            nk_layout_row_begin(ctx, NK_STATIC, height, num_tex_line);
+            for (int i = 0; i < num_tex_line; i++) {
+                nk_layout_row_push(ctx, TEXTURE_WIDTH);
+                nk_image(ctx, nk_image_id(textures[i]));
+            }
+            nk_layout_row_end(ctx);
+
+            nk_layout_row_begin(ctx, NK_STATIC, height, num_tex_line);
+            for (int i = 0; i < num_tex_line; i++) {
+                nk_layout_row_push(ctx, TEXTURE_WIDTH);
+                nk_image(ctx, nk_image_id(textures[num_tex_line + i]));
+            }
+            nk_layout_row_end(ctx);
+
             struct nk_vec2 sz = nk_window_get_size(ctx);
-            width = sz.x;
+    
         }
 
         nk_end(ctx);

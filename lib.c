@@ -12,8 +12,4 @@
 #include "nuklear.h"
 #include "nuklear_sdl_gl3.h"
 
-#define FLO_QUEUE_IMPLEMENTATION
-#include "flo_queue.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
