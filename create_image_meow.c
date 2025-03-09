@@ -38,8 +38,8 @@ flo_pixmap_t *  create_image_meow(long bufsize, const uint16_t buffer[bufsize], 
   // last valid index
   const int end =  bufsize /scale - fft_size;
   const int off = fft_size * (1.f - overlap_percent);
-  const int width_px = end / off;
-
+  const int width_px = (end / off / 2) * 2 ;
+ 
   flo_pixmap_t *pixmap = flo_pixmap_create( width_px, height);
 #pragma omp parallel
   {

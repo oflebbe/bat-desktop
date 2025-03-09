@@ -32,7 +32,7 @@
 #define WINDOW_WIDTH 2000
 #define WINDOW_HEIGHT 256
 
-#define TEXTURE_WIDTH 16384
+#define TEXTURE_WIDTH 4096
 
 #define STEREO 1
 
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, result.pixmap_l->width);
-         
+        printf("%d\n",result.pixmap_l->width );
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, result.pixmap_l->height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, 
                 &result.pixmap_l->buf[(i * TEXTURE_WIDTH)]);
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 
     for (int i= 0; i < num_tex_line; i++) {
         glBindTexture(GL_TEXTURE_2D, textures[i+num_tex_line]);
-       // glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, result.pixmap_r->width);
@@ -263,6 +263,7 @@ int main(int argc, char *argv[])
             nk_layout_row_begin(ctx, NK_STATIC, height, num_tex_line);
             for (int i = 0; i < num_tex_line; i++) {
                 nk_layout_row_push(ctx, TEXTURE_WIDTH);
+                
                 nk_image(ctx, nk_image_id(textures[i]));
             }
             nk_layout_row_end(ctx);
@@ -275,7 +276,6 @@ int main(int argc, char *argv[])
             nk_layout_row_end(ctx);
 
             struct nk_vec2 sz = nk_window_get_size(ctx);
-    
         }
 
         nk_end(ctx);
