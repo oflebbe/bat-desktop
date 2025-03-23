@@ -30,7 +30,6 @@ double flo_end_time(flo_time_t start)
 }
 #else
 
-
 flo_time_t flo_get_time(void)
 {
     flo_time_t start;

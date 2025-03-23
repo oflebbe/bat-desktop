@@ -1,15 +1,16 @@
 #ifndef CREATE_IMAGE_H
 #define CREATE_IMAGE_H
 
-#include "flo_pixmap.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "flo_matrix.h"
 
-flo_pixmap_t *create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent);
+typedef struct
+{
+    flo_matrix_t *left;
+    flo_matrix_t *right;
+    flo_matrix_t *correlation;
+} stereo_result_t;
 
-#ifdef __cplusplus
-}
-#endif
+flo_matrix_t *create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent);
+stereo_result_t create_stereo_image_meow(long bufsize, const uint16_t buffer[bufsize], int fft_size, float overlap_percent);
 
 #endif
