@@ -33,8 +33,6 @@
 #include "flo_file.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#define FLO_SHADER_IMPLEMENTATION
-#include "flo_shader.h"
 
 #define WINDOW_WIDTH 2000
 #define WINDOW_HEIGHT 256
@@ -60,59 +58,60 @@ MessageCallback(GLenum source,
             type, severity, message);
 }
 
-typedef struct results
-{
-    flo_matrix_t *matrix_l;
-    flo_matrix_t *matrix_r;
-} result_t;
 
-// Function to generate a simple image (random colors)
-result_t generate_image(long size, const uint16_t raw_file[size], int fft_size, float overlap_percent)
-{
-    flo_matrix_t *result[2];
-
-    // #pragma omp parallel
-    for (int i = 0; i < 2; i++)
-    {
-        result[i] = create_image_meow(size, raw_file, 2, i, fft_size, overlap_percent);
-    }
-
-    return (result_t){.matrix_l = result[0], .matrix_r = result[1]};
-}
-
+// Manage the subtextures of a texture
 typedef struct
 {
     int num;
-    GLuint texs[];
+    GLuint *left;
+    GLuint *right;
+    GLuint *correlation;
 } textures_t;
 
-textures_t *textures_alloc(int num_texs)
+textures_t textures_alloc(int num)
 {
-    textures_t *self = malloc(sizeof(textures_t) + num_texs * sizeof(GLuint));
-    glGenTextures(num_texs, self->texs);
-    self->num = num_texs;
-    return self;
-}
-
-void textures_free(textures_t *t)
-{
-    if (t == NULL)
-    {
-        return;
+    GLuint *left = calloc( num, sizeof(GLuint));
+    if (!left) {
+        return (textures_t){0};
     }
-    glDeleteTextures(t->num, t->texs);
-    free(t);
+
+    GLuint *right = calloc( num, sizeof(GLuint));
+    if (!right) {
+        free(left);
+        return (textures_t){0};
+    }
+    
+    GLuint *correlation = calloc( num, sizeof(GLuint));
+    if (!correlation) {
+        free(left);
+        free(right);
+        return (textures_t){0};
+    }
+
+    glGenTextures(num, left);
+    glGenTextures(num, right);
+    glGenTextures(num, correlation);
+    
+    return (textures_t){.num = num, .left = left, .right = right, .correlation = correlation};
 }
 
-void calculate_texture(const result_t *result, const textures_t *textures, float sat, float lit)
+void textures_free(textures_t t[static 1])
 {
+    glDeleteTextures(t->num, t->left);
+    glDeleteTextures(t->num, t->right);
+    glDeleteTextures(t->num, t->correlation);
+    free(t->left);
+    free(t->right);
+    free(t->correlation);
+}
 
-    int num_tex_line = result->matrix_l->width / TEXTURE_WIDTH;
-    /*
-    textures_t *textures = textures_alloc( num_tex_line * 2);
-    */
-    int height = result->matrix_l->height;
-    int width = result->matrix_l->width;
+static uint16_t grey( float v, float s, float l) {
+    return flo_hsvToRgb565( 0.0f, 1.0f, v);
+}
+
+static void calculate_texture_line( const flo_matrix_t *mat, int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)( float, float, float)) {
+    assert(mat);
+    int height = mat->height;
 
     flo_pixmap_t *p = flo_pixmap_create(TEXTURE_WIDTH, height);
     for (int i = 0; i < num_tex_line; i++)
@@ -121,36 +120,31 @@ void calculate_texture(const result_t *result, const textures_t *textures, float
         {
             for (int h = 0; h < height; h++)
             {
-                flo_pixmap_set_pixel(p, w, h, flo_hsvToRgb565(1.0f - flo_matrix_get_value(result->matrix_l, i * TEXTURE_WIDTH + w, h), sat, lit));
+                flo_pixmap_set_pixel(p, w, h, f( 1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit)); //flo_hsvToRgb565(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit));
             }
         }
-        glBindTexture(GL_TEXTURE_2D, textures->texs[i]);
+        glBindTexture(GL_TEXTURE_2D, texture_id[i]);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
                      p->buf);
     }
-
-    for (int i = 0; i < num_tex_line; i++)
-    {
-
-        // #pragma omp parallel
-        for (int w = 0; w < TEXTURE_WIDTH; w++)
-        {
-            for (int h = 0; h < height; h++)
-            {
-                flo_pixmap_set_pixel(p, w, h, flo_hsvToRgb565(1.0f - flo_matrix_get_value(result->matrix_r, i * TEXTURE_WIDTH + w, h), sat, lit));
-            }
-        }
-        glBindTexture(GL_TEXTURE_2D, textures->texs[i + num_tex_line]);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                     &p->buf);
-    }
     free(p);
+}
+
+
+static void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], float sat, float lit)
+{
+    int num_tex_line = result->left->width / TEXTURE_WIDTH;
+    assert( num_tex_line <= textures->num);
+
+
+    calculate_texture_line( result->left, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
+
+    calculate_texture_line( result->right, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
+
+    calculate_texture_line( result->correlation, num_tex_line, textures->correlation, sat, lit, grey);
 }
 
 /* ===============================================================
@@ -225,24 +219,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    const char *vertex_p = flo_readall("vertex_shader.glsl");
-    if (!vertex_p)
-    {
-        fprintf(stderr, "vertex_shader.glsl could not be read\n");
-        exit(1);
-    }
-
-    const char *frag_p = flo_readall("fragment_shader.glsl");
-    if (!frag_p)
-    {
-        fprintf(stderr, "fragment_shader.glsl could not be read\n");
-        exit(1);
-    }
-
-    GLuint program = create_shader_program(vertex_p, frag_p);
-    free((char *)frag_p);
-    free((char *)vertex_p);
-
     ctx = nk_sdl_init(win);
     /* Load Fonts: if none of these are loaded a default font will be used  */
     /* Load Cursor: if you uncomment cursor loading please hide the cursor */
@@ -265,10 +241,10 @@ int main(int argc, char *argv[])
     // During init, enable debug output
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
-    result_t result = generate_image(size, raw_file, 512, 0.1);
+    stereo_result_t result = create_stereo_image_meow(size, raw_file, 512, 0.1);
 
     bool changed = true;
-    textures_t *textures = textures_alloc(result.matrix_l->width / TEXTURE_WIDTH * 2);
+    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH * 2);
     float sat = 0.9f;
     float lit = 0.8f;
     bool next_wait = false;
@@ -299,8 +275,8 @@ int main(int argc, char *argv[])
 
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
-        int height = result.matrix_l->height;
-        int width = result.matrix_l->width;
+        int height = result.left->height;
+        int width = result.left->width;
         /* GUI */
         // Start a new UI frame
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 2 + 40),
@@ -322,24 +298,32 @@ int main(int argc, char *argv[])
                     textures_free( textures);
                 }*/
 
-                calculate_texture(&result, textures, sat, lit);
+                calculate_texture(&result, &textures, sat, lit);
                 changed = false;
             }
             // Use nk_image to display the texture
-            nk_layout_row_begin(ctx, NK_STATIC, height, textures->num / 2);
-            for (int i = 0; i < textures->num / 2; i++)
+            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
+            for (int i = 0; i < textures.num / 2; i++)
             {
                 nk_layout_row_push(ctx, TEXTURE_WIDTH);
 
-                nk_image(ctx, nk_image_id(textures->texs[i]));
+                nk_image(ctx, nk_image_id(textures.left[i]));
             }
             nk_layout_row_end(ctx);
 
-            nk_layout_row_begin(ctx, NK_STATIC, height, textures->num / 2);
-            for (int i = 0; i < textures->num / 2; i++)
+            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
+            for (int i = 0; i < textures.num / 2; i++)
             {
                 nk_layout_row_push(ctx, TEXTURE_WIDTH);
-                nk_image(ctx, nk_image_id(textures->texs[textures->num / 2 + i]));
+                nk_image(ctx, nk_image_id(textures.right[i]));
+            }
+            nk_layout_row_end(ctx);
+
+            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
+            for (int i = 0; i < textures.num / 2; i++)
+            {
+                nk_layout_row_push(ctx, TEXTURE_WIDTH);
+                nk_image(ctx, nk_image_id(textures.correlation[i]));
             }
             nk_layout_row_end(ctx);
 
@@ -362,9 +346,11 @@ int main(int argc, char *argv[])
     }
 
 cleanup:
-    free(result.matrix_l);
-    free(result.matrix_r);
-    textures_free(textures);
+    free(result.left);
+    free(result.right);
+    free(result.correlation);
+    
+    textures_free(&textures);
     nk_sdl_shutdown();
     SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(win);

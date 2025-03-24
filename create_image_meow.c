@@ -16,18 +16,18 @@
 #define M_PI 3.1415926
 #endif
 
-flo_matrix_t *create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent)
+const mono_result_t create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent)
 {
   if (offset < 0 || scale < 0 || offset >= scale)
   {
-    return NULL;
+    return (mono_result_t){0};
   }
   const int height = fft_size / 2;
   const float a0 = 25. / 46.;
   float *window = calloc(1, sizeof(float) * fft_size);
   if (!window)
   {
-    return NULL;
+    return (mono_result_t){0};
   }
   for (int i = 0; i < fft_size; i++)
   {
@@ -88,7 +88,7 @@ flo_matrix_t *create_image_meow(long bufsize, const uint16_t buffer[bufsize], in
     free(fft_real);
   }
   free(window);
-  return matrix;
+  return (mono_result_t){.channel = matrix};
 }
 
 stereo_result_t create_stereo_image_meow(long bufsize, const uint16_t buffer[bufsize], int fft_size, float overlap_percent)
