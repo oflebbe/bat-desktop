@@ -58,31 +58,34 @@ MessageCallback(GLenum source,
             type, severity, message);
 }
 
-
 // Manage the subtextures of a texture
 typedef struct
 {
     int num;
+    int width;
     GLuint *left;
     GLuint *right;
     GLuint *correlation;
 } textures_t;
 
-textures_t textures_alloc(int num)
+textures_t textures_alloc(int num, int width)
 {
-    GLuint *left = calloc( num, sizeof(GLuint));
-    if (!left) {
+    GLuint *left = calloc(num, sizeof(GLuint));
+    if (!left)
+    {
         return (textures_t){0};
     }
 
-    GLuint *right = calloc( num, sizeof(GLuint));
-    if (!right) {
+    GLuint *right = calloc(num, sizeof(GLuint));
+    if (!right)
+    {
         free(left);
         return (textures_t){0};
     }
-    
-    GLuint *correlation = calloc( num, sizeof(GLuint));
-    if (!correlation) {
+
+    GLuint *correlation = calloc(num, sizeof(GLuint));
+    if (!correlation)
+    {
         free(left);
         free(right);
         return (textures_t){0};
@@ -91,8 +94,8 @@ textures_t textures_alloc(int num)
     glGenTextures(num, left);
     glGenTextures(num, right);
     glGenTextures(num, correlation);
-    
-    return (textures_t){.num = num, .left = left, .right = right, .correlation = correlation};
+
+    return (textures_t){.num = num, .width = width, .left = left, .right = right, .correlation = correlation};
 }
 
 void textures_free(textures_t t[static 1])
@@ -105,11 +108,13 @@ void textures_free(textures_t t[static 1])
     free(t->correlation);
 }
 
-static uint16_t grey( float v, float s, float l) {
-    return flo_hsvToRgb565( 0.0f, 1.0f, v);
+static uint16_t grey(float v, float s, float l)
+{
+    return flo_hsvToRgb565(0.0f, 0.0f, v);
 }
 
-static void calculate_texture_line( const flo_matrix_t *mat, int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)( float, float, float)) {
+static void calculate_texture_line(const flo_matrix_t *mat, int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)(float, float, float))
+{
     assert(mat);
     int height = mat->height;
 
@@ -120,7 +125,7 @@ static void calculate_texture_line( const flo_matrix_t *mat, int num_tex_line, G
         {
             for (int h = 0; h < height; h++)
             {
-                flo_pixmap_set_pixel(p, w, h, f( 1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit)); //flo_hsvToRgb565(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit));
+                flo_pixmap_set_pixel(p, w, h, f(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit)); // flo_hsvToRgb565(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit));
             }
         }
         glBindTexture(GL_TEXTURE_2D, texture_id[i]);
@@ -133,18 +138,16 @@ static void calculate_texture_line( const flo_matrix_t *mat, int num_tex_line, G
     free(p);
 }
 
-
 static void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], float sat, float lit)
 {
     int num_tex_line = result->left->width / TEXTURE_WIDTH;
-    assert( num_tex_line <= textures->num);
+    assert(num_tex_line <= textures->num);
 
+    calculate_texture_line(result->left, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
 
-    calculate_texture_line( result->left, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
+    calculate_texture_line(result->right, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
 
-    calculate_texture_line( result->right, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
-
-    calculate_texture_line( result->correlation, num_tex_line, textures->correlation, sat, lit, grey);
+    calculate_texture_line(result->correlation, num_tex_line, textures->correlation, sat, lit, grey);
 }
 
 /* ===============================================================
@@ -210,6 +213,20 @@ int main(int argc, char *argv[])
                            WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
     SDL_GetWindowSize(win, &win_width, &win_height);
+    int rw = 0, rh = 0;
+    SDL_Renderer *render = SDL_GetRenderer(win);
+    SDL_GetRendererOutputSize(render, &rw, &rh);
+    char *ptr = SDL_GetError();
+
+    float widthScale = (float)rw / (float)win_width;
+    float heightScale = (float)rh / (float)win_height;
+    if (widthScale != heightScale)
+    {
+        fprintf(stderr, "WARNING: width scale != height scale\n");
+    }
+
+    SDL_RenderSetScale(render, widthScale, heightScale);
+
     /* OpenGL setup */
     glViewport(0, 0, win_width, win_height);
     glewExperimental = 1;
@@ -227,11 +244,6 @@ int main(int argc, char *argv[])
 
         nk_sdl_font_stash_begin(&atlas);
         struct nk_font *droid = nk_font_atlas_add_from_file(atlas, "DroidSans.ttf", 20, 0);
-        /*struct nk_font *roboto = nk_font_atlas_add_from_file(atlas, "../../../extra_font/Roboto-Regular.ttf", 16, 0);*/
-        /*struct nk_font *future = nk_font_atlas_add_from_file(atlas, "../../../extra_font/kenvector_future_thin.ttf", 13, 0);*/
-        /*struct nk_font *clean = nk_font_atlas_add_from_file(atlas, "../../../extra_font/ProggyClean.ttf", 12, 0);*/
-        /*struct nk_font *tiny = nk_font_atlas_add_from_file(atlas, "../../../extra_font/ProggyTiny.ttf", 10, 0);*/
-        /*struct nk_font *cousine = nk_font_atlas_add_from_file(atlas, "../../../extra_font/Cousine-Regular.ttf", 13, 0);*/
         nk_sdl_font_stash_end();
         /*nk_style_load_all_cursors(ctx, atlas->cursors);*/
         nk_style_set_font(ctx, &droid->handle);
@@ -244,7 +256,7 @@ int main(int argc, char *argv[])
     stereo_result_t result = create_stereo_image_meow(size, raw_file, 512, 0.1);
 
     bool changed = true;
-    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH * 2);
+    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH, TEXTURE_WIDTH);
     float sat = 0.9f;
     float lit = 0.8f;
     bool next_wait = false;
@@ -277,9 +289,10 @@ int main(int argc, char *argv[])
         nk_input_end(ctx);
         int height = result.left->height;
         int width = result.left->width;
+
         /* GUI */
         // Start a new UI frame
-        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 2 + 40),
+        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
 
@@ -294,40 +307,31 @@ int main(int argc, char *argv[])
 
             if (changed)
             {
-                /* if (textures != NULL) {
-                    textures_free( textures);
-                }*/
-
                 calculate_texture(&result, &textures, sat, lit);
                 changed = false;
             }
+            ctx->style.window.spacing = nk_vec2(0.f, 0.f);
             // Use nk_image to display the texture
-            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
-            for (int i = 0; i < textures.num / 2; i++)
+            nk_layout_row_static(ctx, height, textures.width, textures.num);
+            for (int i = 0; i < textures.num; i++)
             {
-                nk_layout_row_push(ctx, TEXTURE_WIDTH);
-
                 nk_image(ctx, nk_image_id(textures.left[i]));
             }
             nk_layout_row_end(ctx);
 
-            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
-            for (int i = 0; i < textures.num / 2; i++)
+            nk_layout_row_static(ctx, height, textures.width, textures.num);
+            for (int i = 0; i < textures.num; i++)
             {
-                nk_layout_row_push(ctx, TEXTURE_WIDTH);
                 nk_image(ctx, nk_image_id(textures.right[i]));
             }
             nk_layout_row_end(ctx);
 
-            nk_layout_row_begin(ctx, NK_STATIC, height, textures.num / 2);
-            for (int i = 0; i < textures.num / 2; i++)
+            nk_layout_row_static(ctx, height, textures.width, textures.num);
+            for (int i = 0; i < textures.num; i++)
             {
-                nk_layout_row_push(ctx, TEXTURE_WIDTH);
                 nk_image(ctx, nk_image_id(textures.correlation[i]));
             }
             nk_layout_row_end(ctx);
-
-            struct nk_vec2 sz = nk_window_get_size(ctx);
         }
         nk_end(ctx);
 
@@ -349,7 +353,7 @@ cleanup:
     free(result.left);
     free(result.right);
     free(result.correlation);
-    
+
     textures_free(&textures);
     nk_sdl_shutdown();
     SDL_GL_DeleteContext(glContext);

@@ -93,6 +93,9 @@ const mono_result_t create_image_meow(long bufsize, const uint16_t buffer[bufsiz
 
 stereo_result_t create_stereo_image_meow(long bufsize, const uint16_t buffer[bufsize], int fft_size, float overlap_percent)
 {
+  assert( bufsize > 0);
+  assert( overlap_percent >= 0.0f && overlap_percent < 1.0f);
+  assert( fft_size > 0);
   const int scale = 2;
   const int height = fft_size / 2;
   const float a0 = 25. / 46.;

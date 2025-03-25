@@ -74,8 +74,6 @@ void calculate_texture(const flo_matrix_t *matrix, float sat, float lit)
  * ===============================================================*/
 int main(int argc, char *argv[])
 {
-    flo_time_t start_time = flo_get_time();
-
     if (argc < 2)
     {
         fprintf(stderr, "Need 1 filename argument\n");
@@ -89,7 +87,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     size_t size;
-    uint16_t *raw_file = (uint16_t *)flo_mapfile(fp, &size);
+    const uint16_t *raw_file = (uint16_t *)flo_mapfile(fp, &size);
     fclose(fp);
     if (!raw_file)
     {
