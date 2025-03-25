@@ -155,7 +155,11 @@ static void calculate_texture(const stereo_result_t result[static 1], const text
  *                          DEMO
  *
  * ===============================================================*/
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+#else
 int main(int argc, char *argv[])
+#endif
 {
     /* Platform */
     SDL_Window *win;
@@ -163,6 +167,10 @@ int main(int argc, char *argv[])
 
     int win_width, win_height;
     int running = 1;
+#ifdef _WIN32
+    int argc = 1;
+    char *argv[] = {"capture.raw"};
+#endif
     if (argc < 2)
     {
         fprintf(stderr, "Need 1 filename argument\n");
@@ -251,7 +259,7 @@ int main(int argc, char *argv[])
 
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
     // During init, enable debug output
-    glEnable(GL_DEBUG_OUTPUT);
+  //  glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
     stereo_result_t result = create_stereo_image_meow(size, raw_file, 512, 0.1);
 
@@ -317,21 +325,17 @@ int main(int argc, char *argv[])
             {
                 nk_image(ctx, nk_image_id(textures.left[i]));
             }
-            nk_layout_row_end(ctx);
-
             nk_layout_row_static(ctx, height, textures.width, textures.num);
             for (int i = 0; i < textures.num; i++)
             {
                 nk_image(ctx, nk_image_id(textures.right[i]));
             }
-            nk_layout_row_end(ctx);
 
             nk_layout_row_static(ctx, height, textures.width, textures.num);
             for (int i = 0; i < textures.num; i++)
             {
                 nk_image(ctx, nk_image_id(textures.correlation[i]));
             }
-            nk_layout_row_end(ctx);
         }
         nk_end(ctx);
 

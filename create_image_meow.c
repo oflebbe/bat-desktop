@@ -16,7 +16,7 @@
 #define M_PI 3.1415926
 #endif
 
-const mono_result_t create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent)
+mono_result_t create_image_meow(long bufsize, const uint16_t buffer[bufsize], int scale, int offset, int fft_size, float overlap_percent)
 {
   if (offset < 0 || scale < 0 || offset >= scale)
   {
