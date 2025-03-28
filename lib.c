@@ -7,9 +7,12 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_BOOL
 #define NK_IMPLEMENTATION
-#define NK_SDL_GL3_IMPLEMENTATION
-#include <GL/glew.h>
 #include "nuklear.h"
+
+#define GLAD_GL_IMPLEMENTATION
+#include "glad.h"
+
+#define NK_SDL_GL3_IMPLEMENTATION
 #include "nuklear_sdl_gl3.h"
 
 

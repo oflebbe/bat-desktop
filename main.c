@@ -1,4 +1,3 @@
-/* nuklear - 1.32.0 - public domain */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,8 +8,11 @@
 #include <limits.h>
 #include <time.h>
 #include <stdbool.h>
-#include <GL/glew.h>
+
+// Using OpenMP
 #include <omp.h>
+
+#include "glad.h"
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
@@ -20,6 +22,7 @@
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_BOOL
+
 #include "nuklear.h"
 #include "nuklear_sdl_gl3.h"
 
@@ -27,6 +30,8 @@
 #include "flo_pixmap.h"
 #define FLO_MATRIX_IMPLEMENTATION
 #include "flo_matrix.h"
+#define FLO_TIME_IMPLEMENTATION
+#include "flo_time.h"
 
 #include "create_image.h"
 #define FLO_FILE_IMPLEMENTATION
@@ -113,41 +118,60 @@ static uint16_t grey(float v, float s, float l)
     return flo_hsvToRgb565(0.0f, 0.0f, v);
 }
 
-static void calculate_texture_line(const flo_matrix_t *mat, int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)(float, float, float))
+static void calculate_texture_line(const flo_matrix_t *mat, bool first, int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)(float, float, float))
 {
     assert(mat);
     int height = mat->height;
+    int width = mat->width;
+    double all_time = 0.0;
+    flo_time_t start = flo_get_time();
+    flo_pixmap_t *p = flo_pixmap_create(width, height);
 
-    flo_pixmap_t *p = flo_pixmap_create(TEXTURE_WIDTH, height);
+    #pragma omp parallel for
+    for (int h = 0; h < height; h++)
+    {
+        for (int w = 0; w < width; w++)
+        {
+            flo_pixmap_set_pixel(p, w, h, f(1.0f - flo_matrix_get_value(mat, w, h), sat, lit)); 
+        }
+    }
+
     for (int i = 0; i < num_tex_line; i++)
     {
-        for (int w = 0; w < TEXTURE_WIDTH; w++)
-        {
-            for (int h = 0; h < height; h++)
-            {
-                flo_pixmap_set_pixel(p, w, h, f(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit)); // flo_hsvToRgb565(1.0f - flo_matrix_get_value(mat, i * TEXTURE_WIDTH + w, h), sat, lit));
-            }
-        }
         glBindTexture(GL_TEXTURE_2D, texture_id[i]);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                     p->buf);
+        if (first)
+        {
+            glPixelStorei(GL_PACK_ALIGNMENT, 2);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                         p->buf);
+        }
+        else
+        {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                            p->buf);
+        }
     }
+    all_time = flo_end_time(start);
+    printf("All Time: %g ms\n", all_time * 1000.);
     free(p);
 }
 
-static void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], float sat, float lit)
+static void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], bool first, float sat, float lit)
 {
     int num_tex_line = result->left->width / TEXTURE_WIDTH;
     assert(num_tex_line <= textures->num);
 
-    calculate_texture_line(result->left, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
+    calculate_texture_line(result->left, first, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
 
-    calculate_texture_line(result->right, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
+    calculate_texture_line(result->right, first, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
 
-    calculate_texture_line(result->correlation, num_tex_line, textures->correlation, sat, lit, grey);
+    calculate_texture_line(result->correlation, first, num_tex_line, textures->correlation, sat, lit, grey);
 }
 
 /* ===============================================================
@@ -216,10 +240,14 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    win = SDL_CreateWindow("Demo",
+    win = SDL_CreateWindow("Bat Desktop",
                            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                            WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
+    int version = gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
+    printf("GL %d.%d\n", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+
+
     SDL_GetWindowSize(win, &win_width, &win_height);
     int rw = 0, rh = 0;
     SDL_Renderer *render = SDL_GetRenderer(win);
@@ -234,16 +262,7 @@ int main(int argc, char *argv[])
     }
 
     SDL_RenderSetScale(render, widthScale, heightScale);
-
-    /* OpenGL setup */
-    glViewport(0, 0, win_width, win_height);
-    glewExperimental = 1;
-    if (glewInit() != GLEW_OK)
-    {
-        fprintf(stderr, "Failed to setup GLEW\n");
-        exit(1);
-    }
-
+    
     ctx = nk_sdl_init(win);
     /* Load Fonts: if none of these are loaded a default font will be used  */
     /* Load Cursor: if you uncomment cursor loading please hide the cursor */
@@ -259,8 +278,8 @@ int main(int argc, char *argv[])
 
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
     // During init, enable debug output
-  //  glEnable(GL_DEBUG_OUTPUT);
-    glDebugMessageCallback(MessageCallback, 0);
+    //  glEnable(GL_DEBUG_OUTPUT);
+    // glDebugMessageCallback(MessageCallback, 0);
     stereo_result_t result = create_stereo_image_meow(size, raw_file, 512, 0.1);
 
     bool changed = true;
@@ -268,6 +287,7 @@ int main(int argc, char *argv[])
     float sat = 0.9f;
     float lit = 0.8f;
     bool next_wait = false;
+    bool first = true;
     while (running)
     {
         /* Input */
@@ -298,12 +318,14 @@ int main(int argc, char *argv[])
         int height = result.left->height;
         int width = result.left->width;
 
+
         /* GUI */
         // Start a new UI frame
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
 
+    
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
                 nk_layout_row_push(ctx, 50);
@@ -315,8 +337,9 @@ int main(int argc, char *argv[])
 
             if (changed)
             {
-                calculate_texture(&result, &textures, sat, lit);
+                calculate_texture(&result, &textures, first, sat, lit);
                 changed = false;
+                first = false;
             }
             ctx->style.window.spacing = nk_vec2(0.f, 0.f);
             // Use nk_image to display the texture

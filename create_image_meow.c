@@ -126,11 +126,14 @@ stereo_result_t create_stereo_image_meow(long bufsize, const uint16_t buffer[buf
     float *fft_in_right = calloc(fft_size, sizeof(float));
     float *fft_out_correlation = calloc(fft_size, sizeof(float));
     Meow_FFT_Complex *fft_out_left = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
+    assert( fft_out_left);
     Meow_FFT_Complex *fft_out_right = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
+    assert( fft_out_left);
 
     size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
+    assert(fft_real);
     meow_fft_generate_workset_real(fft_size, fft_real);
 
     // start 15kHz
