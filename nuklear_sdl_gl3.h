@@ -374,7 +374,7 @@ nk_sdl_handle_event(SDL_Event *evt)
 {
     struct nk_context *ctx = &sdl.ctx;
     int ctrl_down = SDL_GetModState() & (KMOD_LCTRL | KMOD_RCTRL);
-
+    static bool is_mouse_button_down = false;
     switch(evt->type)
     {
         case SDL_KEYUP: /* KEYUP & KEYDOWN share same routine */
@@ -429,6 +429,7 @@ nk_sdl_handle_event(SDL_Event *evt)
         case SDL_MOUSEBUTTONDOWN:
             {
                 int down = evt->type == SDL_MOUSEBUTTONDOWN;
+                is_mouse_button_down = down;
                 const int x = evt->button.x, y = evt->button.y;
                 switch(evt->button.button)
                 {
@@ -443,6 +444,10 @@ nk_sdl_handle_event(SDL_Event *evt)
             return 1;
 
         case SDL_MOUSEMOTION:
+            if (is_mouse_button_down) {
+                nk_input_scroll(ctx,nk_vec2(-(float) evt->motion.xrel/50.0,(float)evt->motion.yrel));
+                return 1;
+            }
             if (ctx->input.mouse.grabbed) {
                 int x = (int)ctx->input.mouse.prev.x, y = (int)ctx->input.mouse.prev.y;
                 nk_input_motion(ctx, x + evt->motion.xrel, y + evt->motion.yrel);
@@ -459,7 +464,7 @@ nk_sdl_handle_event(SDL_Event *evt)
             return 1;
 
         case SDL_MOUSEWHEEL:
-            nk_input_scroll(ctx,nk_vec2((float)evt->wheel.x,(float)evt->wheel.y));
+            nk_input_scroll(ctx,nk_vec2(evt->wheel.preciseX,evt->wheel.preciseY));
             return 1;
     }
     return 0;

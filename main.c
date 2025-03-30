@@ -247,7 +247,6 @@ int main(int argc, char *argv[])
     int version = gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
     printf("GL %d.%d\n", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
-
     SDL_GetWindowSize(win, &win_width, &win_height);
     int rw = 0, rh = 0;
     SDL_Renderer *render = SDL_GetRenderer(win);
@@ -324,8 +323,6 @@ int main(int argc, char *argv[])
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
-
-    
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
                 nk_layout_row_push(ctx, 50);
