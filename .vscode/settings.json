@@ -79,6 +79,7 @@
         "flo_file.h": "c",
         "qimage": "cpp",
         "hash_map": "cpp",
-        "math.h": "c"
+        "math.h": "c",
+        "nuklear.h": "c"
     }
 }

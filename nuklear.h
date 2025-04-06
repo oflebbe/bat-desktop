@@ -24076,9 +24076,6 @@ nk_label_colored_wrap(struct nk_context *ctx, const char *str, struct nk_color c
 }
 
 
-
-
-
 /* ===============================================================
  *
  *                          IMAGE
@@ -24094,16 +24091,14 @@ nk_handle_ptr(void *ptr)
 NK_API nk_handle
 nk_handle_id(int id)
 {
-    nk_handle handle;
-    nk_zero_struct(handle);
+    nk_handle handle = {0};
     handle.id = id;
     return handle;
 }
 NK_API struct nk_image
 nk_subimage_ptr(void *ptr, nk_ushort w, nk_ushort h, struct nk_rect r)
 {
-    struct nk_image s;
-    nk_zero(&s, sizeof(s));
+    struct nk_image s = {0};
     s.handle.ptr = ptr;
     s.w = w; s.h = h;
     s.region[0] = (nk_ushort)r.x;
@@ -24115,8 +24110,7 @@ nk_subimage_ptr(void *ptr, nk_ushort w, nk_ushort h, struct nk_rect r)
 NK_API struct nk_image
 nk_subimage_id(int id, nk_ushort w, nk_ushort h, struct nk_rect r)
 {
-    struct nk_image s;
-    nk_zero(&s, sizeof(s));
+    struct nk_image s = {0};
     s.handle.id = id;
     s.w = w; s.h = h;
     s.region[0] = (nk_ushort)r.x;

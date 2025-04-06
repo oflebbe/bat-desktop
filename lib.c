@@ -7,7 +7,11 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_BOOL
 #define NK_IMPLEMENTATION
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wconversion"
 #include "nuklear.h"
+#pragma GCC diagnostic pop
 
 #define GLAD_GL_IMPLEMENTATION
 #include "glad.h"

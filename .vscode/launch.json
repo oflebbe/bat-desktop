@@ -3,13 +3,12 @@
     // Zeigen Sie auf vorhandene Attribute, um die zugehörigen Beschreibungen anzuzeigen.
     // Weitere Informationen finden Sie unter https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [
-    
+    "configurations": [    
       {
         "name": "(gdb) Starten",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/build/bat_desktop",
+        "program": "${workspaceFolder}/build/test1",
         "args": ["${env:HOME}/bat034/capture00000.raw"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",

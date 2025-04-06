@@ -41,8 +41,11 @@ size_t flo_filesize(FILE *fp)
     return 0;
   }
   long pos = ftell(fp);
+  if (pos < 0) {
+    abort();
+  }
   fseek(fp, 0, SEEK_SET);
-  return pos;
+  return (size_t) pos;
 }
 
 // read whole file. returns buffer and size

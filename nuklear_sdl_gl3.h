@@ -445,7 +445,7 @@ nk_sdl_handle_event(SDL_Event *evt)
 
         case SDL_MOUSEMOTION:
             if (is_mouse_button_down) {
-                nk_input_scroll(ctx,nk_vec2(-(float) evt->motion.xrel/50.0,(float)evt->motion.yrel));
+                nk_input_scroll(ctx,nk_vec2(-(float) evt->motion.xrel/50.0f,(float)evt->motion.yrel));
                 return 1;
             }
             if (ctx->input.mouse.grabbed) {
