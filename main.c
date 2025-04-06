@@ -25,10 +25,10 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wconversion"
 #include "nuklear.h"
-#include "nuklear_sdl_gl3.h"
 #pragma GCC diagnostic pop
+#include "nuklear_sdl_gl3.h"
+
 
 
 #define FLO_PIXMAP_IMPLEMENTATION
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
     int rw = 0, rh = 0;
     SDL_Renderer *render = SDL_GetRenderer(win);
     SDL_GetRendererOutputSize(render, &rw, &rh);
-    const char *ptr = SDL_GetError();
+    // const char *ptr = SDL_GetError();
 
     float widthScale = (float)rw / (float)win_width;
     float heightScale = (float)rh / (float)win_height;
@@ -337,7 +337,7 @@ int main(int argc, char *argv[])
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
         unsigned int height = result.left->height;
-        unsigned int width = result.left->width;
+        // unsigned int width = result.left->width;
 
         /* GUI */
         // Start a new UI frame

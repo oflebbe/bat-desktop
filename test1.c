@@ -47,7 +47,7 @@ void calculate_texture(const flo_matrix_t *matrix, float sat, float lit)
     unsigned int num_tex_line = matrix->width / TEXTURE_WIDTH - 1;
 
     unsigned int height = matrix->height;
-    unsigned int width = matrix->width;
+    // unsigned int width = matrix->width;
 
     flo_pixmap_t *p = flo_pixmap_create(TEXTURE_WIDTH, height);
     for (unsigned int i = 0; i < num_tex_line; i++)

@@ -9,15 +9,8 @@
 #include "flo_file.h"
 #include "flo_matrix.h"
 #include "create_image.h"
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wconversion"
 #define MEOW_FFT_IMPLEMENTATION
 #include "meow_fft.h"
-#pragma GCC diagnostic pop
-
-
-
 
 mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int scale, unsigned int offset, unsigned int fft_size, float overlap_percent)
 {
@@ -48,10 +41,10 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
     float *fft_in = malloc(fft_size * sizeof(float));
     Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
 
-    size_t workset_bytes = meow_fft_generate_workset_real((int)fft_size, NULL);
+    size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
-    meow_fft_generate_workset_real((int) fft_size, fft_real);
+    meow_fft_generate_workset_real(fft_size, fft_real);
 
     // start 15kHz
     // 0 - 125 kHz -> 512 Px
@@ -110,7 +103,7 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
   }
   for (int i = 0; i < fft_size; i++)
   {
-    window[i] = a0 - (1.0f - a0) * cosf( M_2_PI *  i / (fft_size - 1.0f));
+    window[i] = a0 - (1.0f - a0) * cosf( 2.f * M_PI *  i / (fft_size - 1.0f));
   }
 
   // last valid index
@@ -134,11 +127,11 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
     Meow_FFT_Complex *fft_out_right = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
     assert( fft_out_left);
 
-    size_t workset_bytes = meow_fft_generate_workset_real((int) fft_size, NULL);
+    size_t workset_bytes = meow_fft_generate_workset_real( fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
     assert(fft_real);
-    meow_fft_generate_workset_real((int) fft_size, fft_real);
+    meow_fft_generate_workset_real( fft_size, fft_real);
 
     // start 15kHz
     // 0 - 125 kHz -> 512 Px

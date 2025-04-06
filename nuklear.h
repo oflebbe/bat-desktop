@@ -11192,7 +11192,7 @@ typedef int            stbrp_coord;
 #define STBRP__MAXVAL  0x7fffffff
 /*  Mostly for internal use, but this is the maximum supported coordinate value. */
 
-STBRP_DEF int stbrp_pack_rects (stbrp_context *context, stbrp_rect *rects, int num_rects);
+STBRP_DEF int stbrp_pack_rects (stbrp_context *context, stbrp_rect *rects, size_t num_rects);
 /*  Assign packed locations to rectangles. The rectangles are of type */
 /*  'stbrp_rect' defined below, stored in the array 'rects', and there */
 /*  are 'num_rects' many of them. */
@@ -11644,7 +11644,7 @@ static int STBRP__CDECL rect_original_order(const void *a, const void *b)
    return (p->was_packed < q->was_packed) ? -1 : (p->was_packed > q->was_packed);
 }
 
-STBRP_DEF int stbrp_pack_rects(stbrp_context *context, stbrp_rect *rects, int num_rects)
+STBRP_DEF int stbrp_pack_rects(stbrp_context *context, stbrp_rect *rects, size_t num_rects)
 {
    int i, all_rects_packed = 1;
 
@@ -15807,7 +15807,7 @@ static void stbtt__v_prefilter(unsigned char *pixels, int w, int h, int stride_i
    int j;
    STBTT_memset(buffer, 0, STBTT_MAX_OVERSAMPLE); /*  suppress bogus warning from VS2013 -analyze */
    for (j=0; j < w; ++j) {
-      int i;
+      unsigned int i;
       unsigned int total;
       STBTT_memset(buffer, 0, kernel_width);
 

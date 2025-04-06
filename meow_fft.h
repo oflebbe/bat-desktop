@@ -38,14 +38,14 @@ struct Meow_FFT_Workset_Real;
 
 size_t meow_fft_generate_workset
 (
-      int                      N
+      unsigned                 N
     , struct Meow_FFT_Workset* workset
 );
 // returns the size of the workset if null is passed. 0 if N is invalid.
 
 size_t meow_fft_generate_workset_real
 (
-      int                           N
+      unsigned                      N
     , struct Meow_FFT_Workset_Real* workset
 );
 // returns the size of the workset if null is passed. 0 if N is invalid.
@@ -139,7 +139,7 @@ Meow_Fft_Stages;
 
 typedef struct Meow_FFT_Workset
 {
-    int               N;
+    unsigned int      N;
 
     Meow_FFT_Complex* wn;
     // Non-null only defined if there is a slow-dft as one of the radix stages.
@@ -318,7 +318,7 @@ Meow_Stage_Info meow_calculate_stages(unsigned n, Meow_FFT_Workset* workset)
     return result;
 }
 
-size_t meow_fft_generate_workset(int N, Meow_FFT_Workset* workset)
+size_t meow_fft_generate_workset(unsigned N, Meow_FFT_Workset* workset)
 {
     if (N < 2)
     {
@@ -389,7 +389,7 @@ size_t meow_fft_generate_workset(int N, Meow_FFT_Workset* workset)
 
 size_t meow_fft_generate_workset_real
 (
-      const int              N
+      const unsigned         N
     , Meow_FFT_Workset_Real* workset
 )
 {

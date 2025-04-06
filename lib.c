@@ -9,7 +9,6 @@
 #define NK_IMPLEMENTATION
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wconversion"
 #include "nuklear.h"
 #pragma GCC diagnostic pop
 
@@ -18,5 +17,3 @@
 
 #define NK_SDL_GL3_IMPLEMENTATION
 #include "nuklear_sdl_gl3.h"
-
-
