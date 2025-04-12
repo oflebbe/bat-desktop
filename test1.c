@@ -20,6 +20,7 @@
 #include "flo_file.h"
 
 #include "create_image.h"
+#include "calc_tex.h"
 
 #define STEREO 1
 
@@ -41,28 +42,7 @@ typedef struct image_params
 
 #define TEXTURE_WIDTH 4096
 
-void calculate_texture(const flo_matrix_t *matrix, float sat, float lit)
-{
 
-    unsigned int num_tex_line = matrix->width / TEXTURE_WIDTH - 1;
-
-    unsigned int height = matrix->height;
-    // unsigned int width = matrix->width;
-
-    flo_pixmap_t *p = flo_pixmap_create(TEXTURE_WIDTH, height);
-    for (unsigned int i = 0; i < num_tex_line; i++)
-    {
-#pragma omp parallel for
-        for (unsigned int w = 0; w < TEXTURE_WIDTH; w++)
-        {
-            for (unsigned int h = 0; h < height; h++)
-            {
-                flo_pixmap_set_pixel(p, w, h, flo_hsvToRgb565(1.0f - flo_matrix_get_value(matrix, i * TEXTURE_WIDTH + w, h), sat, lit));
-            }
-        }
-    }
-    free(p);
-}
 
 uint16_t *raw_file = NULL;
 size_t size = 0;
@@ -86,6 +66,23 @@ void benchmark_meow(flo_timer_t *timer, unsigned int n)
     free(stereo.correlation);
 }
 
+
+void calculate_texture(const stereo_result_t result[static 1],  float rot_h, float sat, float lit)
+{
+    
+    const hsv_rotate_t rot = {.base.color_map = map_hsv_rotated, .rot_h = rot_h, .s = sat, .l = lit};
+
+    flo_pixmap_t *left = calculate_texture_line(result->left, (color_map_t *) &rot);
+    free(left);
+
+    flo_pixmap_t *right = calculate_texture_line(result->right, (color_map_t *) &rot);
+    free(right);
+
+    const color_map_t grey = {.color_map = map_grey};
+    flo_pixmap_t *correlation = calculate_texture_line(result->correlation, &grey);
+    free(correlation);
+}
+
 void benchmark_texture(flo_timer_t *timer, unsigned int n)
 {
     const stereo_result_t stereo = create_stereo_image_meow(size, raw_file, 512, 0.1f);
@@ -93,8 +90,7 @@ void benchmark_texture(flo_timer_t *timer, unsigned int n)
     flo_start_timer(timer);
     for (int i = 0; i < n; i++)
     {
-        calculate_texture(stereo.left, 0.9f, 0.9f);
-        calculate_texture(stereo.right, 0.9f, 0.9f);
+        calculate_texture(&stereo, 0.0, 0.9f, 0.9f);
     }
     free(stereo.left);
     free(stereo.right);

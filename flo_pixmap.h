@@ -128,7 +128,7 @@ static inline uint16_t flo_hslToRgb565(float h, float s, float l)
 
 static inline uint16_t flo_hsvToRgb565(float h, float s, float v)
 {
-  assert( h > 0);
+  assert( h >= 0);
   h *= 360.f;
   const float hi = floorf(h / 60.0f);
   const float f = h / 60.f - hi;
@@ -139,6 +139,7 @@ static inline uint16_t flo_hsvToRgb565(float h, float s, float v)
   switch ((int) hi)
   {
   case 0:
+  [[fallthrough]];
   case 6:
     return flo__color565(v, t, p);
   case 1:

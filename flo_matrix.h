@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// float flo_matrix_t
 typedef struct
 {
   size_t len;

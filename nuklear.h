@@ -10198,7 +10198,7 @@ nk_draw_list_stroke_poly_line(struct nk_draw_list *list, const struct nk_vec2 *p
 #endif
 
     color.a = (nk_byte)((float)color.a * list->config.global_alpha);
-    nk_color_fv(&col.r, color);
+    nk_color_fv(&col.r, color); // <---
     col_trans = col;
     col_trans.a = 0;
 

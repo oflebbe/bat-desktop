@@ -8,7 +8,7 @@
         "name": "(gdb) Starten",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/build/test1",
+        "program": "${workspaceFolder}/build/bat_desktop",
         "args": ["${env:HOME}/bat034/capture00000.raw"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",

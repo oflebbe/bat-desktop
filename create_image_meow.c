@@ -39,11 +39,13 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
 #pragma omp parallel
   {
     float *fft_in = malloc(fft_size * sizeof(float));
+    assert(fft_in);
     Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
-
+    assert(fft_out);
     size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
+    assert(fft_real);
     meow_fft_generate_workset_real(fft_size, fft_real);
 
     // start 15kHz
@@ -120,12 +122,15 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
 #pragma omp parallel
   {
     float *fft_in_left = calloc(fft_size, sizeof(float));
+    assert(fft_in_left);
     float *fft_in_right = calloc(fft_size, sizeof(float));
+    assert(fft_in_right);
     float *fft_out_correlation = calloc(fft_size, sizeof(float));
+    assert(fft_out_correlation );
     Meow_FFT_Complex *fft_out_left = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
     assert( fft_out_left);
     Meow_FFT_Complex *fft_out_right = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
-    assert( fft_out_left);
+    assert( fft_out_right);
 
     size_t workset_bytes = meow_fft_generate_workset_real( fft_size, NULL);
     Meow_FFT_Workset_Real *fft_real =

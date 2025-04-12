@@ -29,8 +29,6 @@
 #pragma GCC diagnostic pop
 #include "nuklear_sdl_gl3.h"
 
-
-
 #define FLO_PIXMAP_IMPLEMENTATION
 #include "flo_pixmap.h"
 #define FLO_MATRIX_IMPLEMENTATION
@@ -44,8 +42,9 @@
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
 
+#include "calc_tex.h"
+
 #define WINDOW_WIDTH 2000
-#define WINDOW_HEIGHT 256
 
 #define TEXTURE_WIDTH 4096
 
@@ -73,12 +72,13 @@ typedef struct
 {
     unsigned int num;
     unsigned int width;
+    unsigned int height;
     GLuint *left;
     GLuint *right;
     GLuint *correlation;
 } textures_t;
 
-textures_t textures_alloc(unsigned int num, unsigned int width)
+textures_t textures_alloc(unsigned int num, unsigned int width, unsigned int height)
 {
     GLuint *left = calloc(num, sizeof(GLuint));
     if (!left)
@@ -106,7 +106,7 @@ textures_t textures_alloc(unsigned int num, unsigned int width)
     glGenTextures(num, right);
     glGenTextures(num, correlation);
 #pragma GCC diagnostic pop
-    return (textures_t){.num = num, .width = width, .left = left, .right = right, .correlation = correlation};
+    return (textures_t){.num = num, .width = width, .height = height, .left = left, .right = right, .correlation = correlation};
 }
 
 void textures_free(textures_t t[static 1])
@@ -122,30 +122,8 @@ void textures_free(textures_t t[static 1])
     free(t->correlation);
 }
 
-static uint16_t grey(float v, float s, float l)
+void textures_apply(unsigned int num_tex_line, GLuint texture_id[num_tex_line], flo_pixmap_t *p, unsigned int width, unsigned int height, bool first)
 {
-    return flo_hsvToRgb565(0.0f, 0.0f, v);
-}
-
-static void calculate_texture_line(const flo_matrix_t *mat, bool first, unsigned int num_tex_line, GLuint texture_id[num_tex_line], float sat, float lit, uint16_t (*f)(float, float, float))
-{
-    assert(mat);
-    unsigned int height = mat->height;
-    unsigned int width = mat->width;
-    double all_time = 0.0;
-    flo_timer_t *start = flo_alloc_timer();
-    flo_start_timer(start);
-    flo_pixmap_t *p = flo_pixmap_create(width, height);
-
-#pragma omp parallel for
-    for (unsigned int h = 0; h < height; h++)
-    {
-        for (unsigned int w = 0; w < width; w++)
-        {
-            flo_pixmap_set_pixel(p, w, h, f(1.0f - flo_matrix_get_value(mat, w, h), sat, lit));
-        }
-    }
-
     for (unsigned int i = 0; i < num_tex_line; i++)
     {
         glBindTexture(GL_TEXTURE_2D, texture_id[i]);
@@ -178,22 +156,26 @@ static void calculate_texture_line(const flo_matrix_t *mat, bool first, unsigned
 #pragma GCC diagnostic pop
         }
     }
-    all_time = flo_stop_timer(start);
-    printf("All Time: %g ms\n", all_time * 1000.0);
-    flo_release_timer(start);
-    free(p);
 }
 
-static void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], bool first, float sat, float lit)
+void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], bool first, float rot_h, float sat, float lit)
 {
     unsigned int num_tex_line = result->left->width / TEXTURE_WIDTH;
     assert(num_tex_line <= textures->num);
+    const hsv_rotate_t rot = {.base.color_map = map_hsv_rotated, .rot_h = rot_h, .s = sat, .l = lit};
 
-    calculate_texture_line(result->left, first, num_tex_line, textures->left, sat, lit, flo_hsvToRgb565);
+    flo_pixmap_t *left = calculate_texture_line(result->left, (color_map_t *) &rot);
+    textures_apply(num_tex_line, textures->left, left, textures->width, textures->height, first);
+    free(left);
 
-    calculate_texture_line(result->right, first, num_tex_line, textures->right, sat, lit, flo_hsvToRgb565);
+    flo_pixmap_t *right = calculate_texture_line(result->right, (color_map_t *) &rot);
+    textures_apply(num_tex_line, textures->right, right, textures->width, textures->height, first);
+    free(right);
 
-    calculate_texture_line(result->correlation, first, num_tex_line, textures->correlation, sat, lit, grey);
+    const color_map_t grey = {.color_map = map_grey};
+    flo_pixmap_t *correlation = calculate_texture_line(result->correlation, &grey);
+    textures_apply(num_tex_line, textures->correlation, correlation, textures->width, textures->height, first);
+    free(correlation);
 }
 
 /* ===============================================================
@@ -250,6 +232,8 @@ int main(int argc, char *argv[])
     struct nk_context *ctx = NULL;
     struct nk_colorf bg;
 
+    unsigned int fft_size = 512;
+
     /* SDL setup */
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
     // Prevent DBus memory leak
@@ -264,7 +248,7 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     win = SDL_CreateWindow("Bat Desktop",
                            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                           WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                           WINDOW_WIDTH, (int) fft_size/2, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
     int version = gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
     printf("GL %d.%d\n", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
@@ -301,12 +285,14 @@ int main(int argc, char *argv[])
     // During init, enable debug output
     //  glEnable(GL_DEBUG_OUTPUT);
     // glDebugMessageCallback(MessageCallback, 0);
-    stereo_result_t result = create_stereo_image_meow(size, raw_file, 512, 0.1);
+    
+    stereo_result_t result = create_stereo_image_meow(size, raw_file, fft_size, 0.1);
 
     bool changed = true;
-    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH, TEXTURE_WIDTH);
+    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH, TEXTURE_WIDTH, fft_size/2);
     float sat = 0.9f;
     float lit = 0.8f;
+    float rot = 0.0f;
     bool next_wait = false;
     bool first = true;
     while (running)
@@ -341,28 +327,14 @@ int main(int argc, char *argv[])
 
         /* GUI */
         // Start a new UI frame
-        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT * 3 + 100),
+        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, fft_size/2 * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
-            nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
-            {
-                nk_layout_row_push(ctx, 50);
-                nk_label(ctx, "Saturation:", NK_TEXT_LEFT);
-                nk_layout_row_push(ctx, 110);
-                changed = nk_slider_float(ctx, 0.0f, &sat, 1.0f, 0.1f) || changed;
-            }
-            nk_layout_row_end(ctx);
 
-            if (changed)
-            {
-                calculate_texture(&result, &textures, first, sat, lit);
-                changed = false;
-                first = false;
-            }
             ctx->style.window.spacing = nk_vec2(0.f, 0.f);
             // Use nk_image to display the texture
             // layout repeats itself, so only have to give it once
-            nk_layout_row_static(ctx, (float) height, (int) textures.width, (int) textures.num);
+            nk_layout_row_static(ctx, (float)height, (int)textures.width, (int)textures.num);
             for (unsigned int i = 0; i < textures.num; i++)
             {
                 nk_image(ctx, nk_image_id((int)textures.left[i]));
@@ -376,7 +348,7 @@ int main(int argc, char *argv[])
                 nk_image(ctx, nk_image_id((int)textures.correlation[i]));
             }
             // new height: fontsize 20
-            nk_layout_row_static(ctx, 20, (int) textures.width, (int) textures.num);
+            nk_layout_row_static(ctx, 20, (int)textures.width, (int)textures.num);
             for (unsigned int i = 0; i < textures.num; i++)
             {
                 char sbuffer[20] = {0};
@@ -386,6 +358,33 @@ int main(int argc, char *argv[])
         }
         nk_end(ctx);
 
+        if (nk_begin(ctx, "Settings", nk_rect(0, 0, 100, 100),
+                     NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+        {
+            nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
+            {
+                nk_layout_row_push(ctx, 50);
+                nk_label(ctx, "Saturation:", NK_TEXT_LEFT);
+                nk_layout_row_push(ctx, 110);
+                changed = nk_slider_float(ctx, 0.0f, &sat, 1.0f, 0.1f) || changed;
+            }
+            nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
+            {
+                nk_layout_row_push(ctx, 50);
+                nk_label(ctx, "Rotate:", NK_TEXT_LEFT);
+                nk_layout_row_push(ctx, 110);
+                changed = nk_slider_float(ctx, 0.0f, &rot, 1.0f, 0.1f) || changed;
+            }
+            if (changed)
+            {
+                calculate_texture(&result, &textures, first, rot, sat, lit);
+
+                changed = false;
+                first = false;
+            }
+        }
+
+        nk_end(ctx);
         /* Draw */
         SDL_GetWindowSize(win, &win_width, &win_height);
         glViewport(0, 0, win_width, win_height);
