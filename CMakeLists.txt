@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 #
 project(bat_desktop LANGUAGES  C)
 
+
+SET(CMAKE_C_FLAGS_RELEASE "-O3")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2" "-g")
+
 find_package(SDL2 REQUIRED)
 
 add_compile_options("-std=gnu23" "-Wall" "-pedantic" "-fopenmp") 

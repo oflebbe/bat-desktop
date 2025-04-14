@@ -122,60 +122,41 @@ void textures_free(textures_t t[static 1])
     free(t->correlation);
 }
 
-void textures_apply(unsigned int num_tex_line, GLuint texture_id[num_tex_line], flo_pixmap_t *p, unsigned int width, unsigned int height, bool first)
+void texture_apply(GLuint texture_id, const flo_pixmap_t *p, unsigned int width, unsigned int height, bool first)
 {
-    for (unsigned int i = 0; i < num_tex_line; i++)
+
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+    glPixelStorei(GL_PACK_ALIGNMENT, 2);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    if (first)
     {
-        glBindTexture(GL_TEXTURE_2D, texture_id[i]);
-        if (first)
-        {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-            glPixelStorei(GL_PACK_ALIGNMENT, 2);
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                         p->buf + TEXTURE_WIDTH * i);
-#pragma GCC diagnostic pop
-        }
-        else
-        {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-            glPixelStorei(GL_PACK_ALIGNMENT, 2);
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                            p->buf + TEXTURE_WIDTH * i);
-#pragma GCC diagnostic pop
-        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                     p->buf);
     }
+    else
+    {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                        p->buf);
+    }
+#pragma GCC diagnostic pop
 }
 
-void calculate_texture(const stereo_result_t result[static 1], const textures_t textures[static 1], bool first, float rot_h, float sat, float lit)
+
+void calculate_texture(const stereo_result_t result[static 1], const textures_t *textures, bool first, float rot_h, float sat, float val)
 {
-    unsigned int num_tex_line = result->left->width / TEXTURE_WIDTH;
-    assert(num_tex_line <= textures->num);
-    const hsv_rotate_t rot = {.base.color_map = map_hsv_rotated, .rot_h = rot_h, .s = sat, .l = lit};
+    assert( textures);
+    const hsv_rotate_t rot = {.rot_h = rot_h, .s = sat, .v = val};
+    
+    calculate_texture_line_hsv(result->left, rot, textures->num, textures->left, texture_apply, first);
+    calculate_texture_line_hsv(result->right, rot, textures->num, textures->right, texture_apply, first);
 
-    flo_pixmap_t *left = calculate_texture_line(result->left, (color_map_t *) &rot);
-    textures_apply(num_tex_line, textures->left, left, textures->width, textures->height, first);
-    free(left);
-
-    flo_pixmap_t *right = calculate_texture_line(result->right, (color_map_t *) &rot);
-    textures_apply(num_tex_line, textures->right, right, textures->width, textures->height, first);
-    free(right);
-
-    const color_map_t grey = {.color_map = map_grey};
-    flo_pixmap_t *correlation = calculate_texture_line(result->correlation, &grey);
-    textures_apply(num_tex_line, textures->correlation, correlation, textures->width, textures->height, first);
-    free(correlation);
+    calculate_texture_line_grey(result->right,  textures->num, textures->correlation, texture_apply, first);
 }
 
 /* ===============================================================
@@ -248,7 +229,7 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     win = SDL_CreateWindow("Bat Desktop",
                            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                           WINDOW_WIDTH, (int) fft_size/2, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                           WINDOW_WIDTH, (int)fft_size / 2, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
     int version = gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
     printf("GL %d.%d\n", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
@@ -285,11 +266,12 @@ int main(int argc, char *argv[])
     // During init, enable debug output
     //  glEnable(GL_DEBUG_OUTPUT);
     // glDebugMessageCallback(MessageCallback, 0);
-    
+
     stereo_result_t result = create_stereo_image_meow(size, raw_file, fft_size, 0.1);
 
     bool changed = true;
-    textures_t textures = textures_alloc(result.left->width / TEXTURE_WIDTH, TEXTURE_WIDTH, fft_size/2);
+    int num_tex_line = result.left->width / TEXTURE_WIDTH;
+    textures_t textures = textures_alloc( num_tex_line, TEXTURE_WIDTH, fft_size / 2);
     float sat = 0.9f;
     float lit = 0.8f;
     float rot = 0.0f;
@@ -327,7 +309,7 @@ int main(int argc, char *argv[])
 
         /* GUI */
         // Start a new UI frame
-        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, fft_size/2 * 3 + 100),
+        if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, fft_size / 2 * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
 

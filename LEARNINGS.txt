@@ -20,4 +20,10 @@ c
 ---
 
 openssf sign-conversion (1 Improvement Meow)
+
+
 conversion (gaga as rust)
+---
+
+CMAKE Release deaktiviert assert()
+

@@ -67,21 +67,17 @@ void benchmark_meow(flo_timer_t *timer, unsigned int n)
 }
 
 
-void calculate_texture(const stereo_result_t result[static 1],  float rot_h, float sat, float lit)
+void calculate_texture(const stereo_result_t result[static 1], bool first, float rot_h, float sat, float val)
 {
+ 
+    const hsv_rotate_t rot = {.rot_h = rot_h, .s = sat, .v = val};
     
-    const hsv_rotate_t rot = {.base.color_map = map_hsv_rotated, .rot_h = rot_h, .s = sat, .l = lit};
+    calculate_texture_line_hsv(result->left, rot, 0, NULL, NULL, first);
+    calculate_texture_line_hsv(result->right, rot, 0, NULL, NULL, first);
 
-    flo_pixmap_t *left = calculate_texture_line(result->left, (color_map_t *) &rot);
-    free(left);
-
-    flo_pixmap_t *right = calculate_texture_line(result->right, (color_map_t *) &rot);
-    free(right);
-
-    const color_map_t grey = {.color_map = map_grey};
-    flo_pixmap_t *correlation = calculate_texture_line(result->correlation, &grey);
-    free(correlation);
+    // calculate_texture_line_grey(result->right,  0, NULL, NULL,  first);
 }
+
 
 void benchmark_texture(flo_timer_t *timer, unsigned int n)
 {
@@ -90,7 +86,7 @@ void benchmark_texture(flo_timer_t *timer, unsigned int n)
     flo_start_timer(timer);
     for (int i = 0; i < n; i++)
     {
-        calculate_texture(&stereo, 0.0, 0.9f, 0.9f);
+        calculate_texture(&stereo, true, 0.0, 0.9f, 0.9f);
     }
     free(stereo.left);
     free(stereo.right);
