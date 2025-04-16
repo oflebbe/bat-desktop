@@ -41,12 +41,12 @@
 #include "flo_file.h"
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
-
+#define TEXTURE_WIDTH 4096
 #include "calc_tex.h"
 
 #define WINDOW_WIDTH 2000
 
-#define TEXTURE_WIDTH 4096
+
 
 #define STEREO 1
 
@@ -129,7 +129,7 @@ void texture_apply(GLuint texture_id, const flo_pixmap_t *p, unsigned int width,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
     glPixelStorei(GL_PACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, width);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, TEXTURE_WIDTH);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
@@ -156,7 +156,7 @@ void calculate_texture(const stereo_result_t result[static 1], const textures_t 
     calculate_texture_line_hsv(result->left, rot, textures->num, textures->left, texture_apply, first);
     calculate_texture_line_hsv(result->right, rot, textures->num, textures->right, texture_apply, first);
 
-    calculate_texture_line_grey(result->right,  textures->num, textures->correlation, texture_apply, first);
+    calculate_texture_line_grey(result->correlation,  textures->num, textures->correlation, texture_apply, first);
 }
 
 /* ===============================================================
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
     stereo_result_t result = create_stereo_image_meow(size, raw_file, fft_size, 0.1);
 
     bool changed = true;
-    int num_tex_line = result.left->width / TEXTURE_WIDTH;
+    unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH - 1;
     textures_t textures = textures_alloc( num_tex_line, TEXTURE_WIDTH, fft_size / 2);
     float sat = 0.9f;
     float lit = 0.8f;
@@ -340,22 +340,22 @@ int main(int argc, char *argv[])
         }
         nk_end(ctx);
 
-        if (nk_begin(ctx, "Settings", nk_rect(0, 0, 100, 100),
+        if (nk_begin(ctx, "Settings", nk_rect( 0, fft_size / 2 * 3 + 100, 400, 400),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
                 nk_layout_row_push(ctx, 50);
                 nk_label(ctx, "Saturation:", NK_TEXT_LEFT);
-                nk_layout_row_push(ctx, 110);
-                changed = nk_slider_float(ctx, 0.0f, &sat, 1.0f, 0.1f) || changed;
+                nk_layout_row_push(ctx, 200);
+                changed = nk_slider_float(ctx, 0.0f, &sat, 1.0f, 0.01f) || changed;
             }
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
                 nk_layout_row_push(ctx, 50);
                 nk_label(ctx, "Rotate:", NK_TEXT_LEFT);
-                nk_layout_row_push(ctx, 110);
-                changed = nk_slider_float(ctx, 0.0f, &rot, 1.0f, 0.1f) || changed;
+                nk_layout_row_push(ctx, 200);
+                changed = nk_slider_float(ctx, 0.0f, &rot, 1.0f, 0.01f) || changed;
             }
             if (changed)
             {

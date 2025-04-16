@@ -20,6 +20,7 @@
 #include "flo_file.h"
 
 #include "create_image.h"
+#define TEXTURE_WIDTH 4096
 #include "calc_tex.h"
 
 #define STEREO 1
@@ -40,7 +41,7 @@ typedef struct image_params
     float overlap_percent;
 } image_params_t;
 
-#define TEXTURE_WIDTH 4096
+
 
 
 
