@@ -16,15 +16,15 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
-NK_API struct nk_context*   nk_sdl_init(SDL_Window *win);
-NK_API void                 nk_sdl_font_stash_begin(struct nk_font_atlas **atlas);
-NK_API void                 nk_sdl_font_stash_end(void);
-NK_API int                  nk_sdl_handle_event(SDL_Event *evt);
-NK_API void                 nk_sdl_render(enum nk_anti_aliasing , int max_vertex_buffer, int max_element_buffer);
-NK_API void                 nk_sdl_shutdown(void);
-NK_API void                 nk_sdl_device_destroy(void);
-NK_API void                 nk_sdl_device_create(void);
-NK_API void                 nk_sdl_handle_grab(void);
+NK_API struct nk_context *nk_sdl_init(SDL_Window *win);
+NK_API void nk_sdl_font_stash_begin(struct nk_font_atlas **atlas);
+NK_API void nk_sdl_font_stash_end(void);
+NK_API int nk_sdl_handle_event(SDL_Event *evt);
+NK_API void nk_sdl_render(enum nk_anti_aliasing, int max_vertex_buffer, int max_element_buffer);
+NK_API void nk_sdl_shutdown(void);
+NK_API void nk_sdl_device_destroy(void);
+NK_API void nk_sdl_device_create(void);
+NK_API void nk_sdl_handle_grab(void);
 
 #endif
 
@@ -54,6 +54,7 @@ struct nk_sdl_device {
     GLint uniform_tex;
     GLint uniform_proj;
     GLuint font_tex;
+    GLint shader_mode;
 };
 
 struct nk_sdl_vertex {
@@ -96,11 +97,28 @@ nk_sdl_device_create(void)
         NK_SHADER_VERSION
         "precision mediump float;\n"
         "uniform sampler2D Texture;\n"
+        "uniform int ShaderMode;"
         "in vec2 Frag_UV;\n"
         "in vec4 Frag_Color;\n"
         "out vec4 Out_Color;\n"
+        "vec3 hue2rgb(float hue) {\n"
+        "    hue = fract(hue); //only use fractional part of hue, making it loop \n"
+        "    float r = abs(hue * 6. - 3.) - 1.; //red \n"
+        "    float g = 2. - abs(hue * 6. - 2.); //green \n"
+        "    float b = 2. - abs(hue * 6. - 4.); //blue \n"
+        "    vec3 rgb = vec3(r,g,b); //combine components \n"
+        "    return clamp(rgb,0.,1.); //cltamp between 0 and 1 \n"
+        "}\n"
         "void main(){\n"
-        "   Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   if (ShaderMode == 0) {\n"
+        "       Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
+        "   } else if (ShaderMode == 1) {\n"
+        "     float r = fract(1.-texture(Texture, Frag_UV.st).r + Frag_Color.r);\n"
+        "     Out_Color = vec4(hue2rgb( r),1.);\n"
+        "   } else if (ShaderMode == 2) {\n"
+        "     float r = 1.-texture(Texture, Frag_UV.st).r;\n"
+        "     Out_Color = vec4(r,r,r,1.);\n"
+        "   }\n"
         "}\n";
 
     struct nk_sdl_device *dev = &sdl.ogl;
@@ -115,6 +133,11 @@ nk_sdl_device_create(void)
     glGetShaderiv(dev->vert_shdr, GL_COMPILE_STATUS, &status);
     assert(status == GL_TRUE);
     glGetShaderiv(dev->frag_shdr, GL_COMPILE_STATUS, &status);
+    char infoLog[512];
+    if (!status) {
+        glGetShaderInfoLog(dev->frag_shdr, 512, NULL, infoLog);
+        printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED %s\n", infoLog);
+    }
     assert(status == GL_TRUE);
     glAttachShader(dev->prog, dev->vert_shdr);
     glAttachShader(dev->prog, dev->frag_shdr);
@@ -127,6 +150,7 @@ nk_sdl_device_create(void)
     dev->attrib_pos = glGetAttribLocation(dev->prog, "Position");
     dev->attrib_uv = glGetAttribLocation(dev->prog, "TexCoord");
     dev->attrib_col = glGetAttribLocation(dev->prog, "Color");
+    dev->shader_mode = glGetUniformLocation(dev->prog, "ShaderMode");
 
     {
         /* buffer setup */
@@ -275,6 +299,7 @@ nk_sdl_render(enum nk_anti_aliasing AA, int max_vertex_buffer, int max_element_b
         /* iterate over and execute each draw command */
         nk_draw_foreach(cmd, &sdl.ctx, &dev->cmds) {
             if (!cmd->elem_count) continue;
+            glUniform1i( dev->shader_mode, cmd->userdata.id);
             glBindTexture(GL_TEXTURE_2D, (GLuint)cmd->texture.id);
             glScissor((GLint)(cmd->clip_rect.x * scale.x),
                 (GLint)((height - (GLint)(cmd->clip_rect.y + cmd->clip_rect.h)) * scale.y),
@@ -350,7 +375,6 @@ nk_sdl_font_stash_end(void)
     nk_font_atlas_end(&sdl.atlas, nk_handle_id((int)sdl.ogl.font_tex), &sdl.ogl.tex_null);
     if (sdl.atlas.default_font)
         nk_style_set_font(&sdl.ctx, &sdl.atlas.default_font->handle);
-
 }
 
 NK_API void

@@ -22,6 +22,7 @@
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_BOOL
+#define NK_INCLUDE_COMMAND_USERDATA
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
@@ -42,11 +43,9 @@
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
 #define TEXTURE_WIDTH 4096
-#include "calc_tex.h"
+
 
 #define WINDOW_WIDTH 2000
-
-
 
 #define STEREO 1
 
@@ -62,9 +61,8 @@ MessageCallback(GLenum source,
                 const GLchar *message,
                 const void *userParam)
 {
-    fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-            (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-            type, severity, message);
+    fprintf(stderr, "GL CALLBACK: %d type = 0x%x, severity = 0x%x, message = %s\n",
+            source, type, severity, message);
 }
 
 // Manage the subtextures of a texture
@@ -122,42 +120,31 @@ void textures_free(textures_t t[static 1])
     free(t->correlation);
 }
 
-void texture_apply(GLuint texture_id, const flo_pixmap_t *p, unsigned int width, unsigned int height, bool first)
+void texture_set(unsigned int num, GLuint texture_id[num], const flo_matrix_t *p, bool first)
 {
-
-    glBindTexture(GL_TEXTURE_2D, texture_id);
+    for (unsigned int i = 0; i < num; i++) {
+        glBindTexture(GL_TEXTURE_2D, texture_id[i]);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-    glPixelStorei(GL_PACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, TEXTURE_WIDTH);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-    if (first)
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, TEXTURE_WIDTH, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                     p->buf);
-    }
-    else
-    {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                        p->buf);
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, p->width);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        if (first)
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0,  GL_RED, TEXTURE_WIDTH, p->height, 0,  GL_RED,  GL_FLOAT, p->buf+i*TEXTURE_WIDTH);
+        }
+        else
+        {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, p->height, GL_RED, GL_FLOAT,
+                            p->buf+i*TEXTURE_WIDTH);
+        }
     }
 #pragma GCC diagnostic pop
 }
 
-
-void calculate_texture(const stereo_result_t result[static 1], const textures_t *textures, bool first, float rot_h, float sat, float val)
-{
-    assert( textures);
-    const hsv_rotate_t rot = {.rot_h = rot_h, .s = sat, .v = val};
-    
-    calculate_texture_line_hsv(result->left, rot, textures->num, textures->left, texture_apply, first);
-    calculate_texture_line_hsv(result->right, rot, textures->num, textures->right, texture_apply, first);
-
-    calculate_texture_line_grey(result->correlation,  textures->num, textures->correlation, texture_apply, first);
-}
 
 /* ===============================================================
  *
@@ -272,6 +259,10 @@ int main(int argc, char *argv[])
     bool changed = true;
     unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH - 1;
     textures_t textures = textures_alloc( num_tex_line, TEXTURE_WIDTH, fft_size / 2);
+    texture_set(num_tex_line, textures.left, result.left, true);
+    texture_set(num_tex_line, textures.right, result.right, true);
+    texture_set(num_tex_line, textures.correlation, result.correlation, true);
+    
     float sat = 0.9f;
     float lit = 0.8f;
     float rot = 0.0f;
@@ -309,40 +300,55 @@ int main(int argc, char *argv[])
 
         /* GUI */
         // Start a new UI frame
+        nk_handle userdata = {0};
         if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, fft_size / 2 * 3 + 100),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
-
+            nk_set_user_data( ctx, userdata);
             ctx->style.window.spacing = nk_vec2(0.f, 0.f);
             // Use nk_image to display the texture
             // layout repeats itself, so only have to give it once
-            nk_layout_row_static(ctx, (float)height, (int)textures.width, (int)textures.num);
+            nk_layout_row_static(ctx, (float)fft_size, (int)textures.width, (int)textures.num);
+            nk_set_user_data( ctx, userdata);
             for (unsigned int i = 0; i < textures.num; i++)
             {
-                nk_image(ctx, nk_image_id((int)textures.left[i]));
+                nk_handle userdata = {0};
+                userdata.id = 1;
+                nk_set_user_data( ctx, userdata);
+                nk_image_color(ctx, nk_image_id((int)textures.left[i]), nk_rgba_f( rot,0.,0.,1.));
             }
             for (unsigned int i = 0; i < textures.num; i++)
             {
-                nk_image(ctx, nk_image_id((int)textures.right[i]));
+                nk_handle userdata = {0};
+                userdata.id = 1;
+                nk_set_user_data( ctx, userdata);
+                nk_image_color(ctx, nk_image_id((int)textures.right[i]), nk_rgba_f( rot,0.,0.,1.));
             }
             for (unsigned int i = 0; i < textures.num; i++)
             {
-                nk_image(ctx, nk_image_id((int)textures.correlation[i]));
+                nk_handle userdata = {0};
+                userdata.id = 2;
+                nk_set_user_data( ctx, userdata);
+                nk_image_color(ctx, nk_image_id((int)textures.correlation[i]), nk_rgba_f( 0.,0.,0.,1.));
             }
             // new height: fontsize 20
             nk_layout_row_static(ctx, 20, (int)textures.width, (int)textures.num);
+            nk_set_user_data( ctx, userdata);
             for (unsigned int i = 0; i < textures.num; i++)
             {
                 char sbuffer[20] = {0};
                 const int n = snprintf(sbuffer, sizeof(sbuffer), "%f s", (float)(i * textures.width) / 250000.0 * 512 * (1.0 - 0.1));
+                nk_set_user_data( ctx, userdata);
                 nk_text(ctx, sbuffer, n, NK_TEXT_LEFT);
             }
         }
+        nk_set_user_data( ctx, userdata);
         nk_end(ctx);
 
         if (nk_begin(ctx, "Settings", nk_rect( 0, fft_size / 2 * 3 + 100, 400, 400),
                      NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
+            nk_set_user_data( ctx, userdata);
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
                 nk_layout_row_push(ctx, 50);
@@ -357,13 +363,7 @@ int main(int argc, char *argv[])
                 nk_layout_row_push(ctx, 200);
                 changed = nk_slider_float(ctx, 0.0f, &rot, 1.0f, 0.01f) || changed;
             }
-            if (changed)
-            {
-                calculate_texture(&result, &textures, first, rot, sat, lit);
-
-                changed = false;
-                first = false;
-            }
+         
         }
 
         nk_end(ctx);
