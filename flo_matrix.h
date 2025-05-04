@@ -40,7 +40,7 @@ __attribute__((always_inline)) inline float flo_matrix_get_value(const flo_matri
 // should be deallocated with free
 flo_matrix_t *flo_matrix_create(unsigned int width, unsigned int height)
 {
-  size_t len = (long)width * (long)height;
+  size_t len = (size_t)width * (size_t)height;
   flo_matrix_t *matrix = (flo_matrix_t *)calloc(1, sizeof(flo_matrix_t) + sizeof(float) * len);
   if (matrix == NULL)
   {

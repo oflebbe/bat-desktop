@@ -3,18 +3,18 @@ cmake_minimum_required(VERSION 3.16)
 project(bat_desktop LANGUAGES  C)
 
 
-SET(CMAKE_C_FLAGS_RELEASE "-O3")
-SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+#SET(CMAKE_C_FLAGS_RELEASE "-O3")
+#SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
 
 find_package(SDL2 REQUIRED)
 
-add_compile_options("-std=gnu23" "-Wall" "-pedantic" "-fopenmp") 
+add_compile_options("-std=gnu2x" "-Wall" "-pedantic" "-fopenmp") 
 add_compile_options("-Wformat" "-Wformat=2" "-Wsign-conversion" "-Werror=format-security" "-Wimplicit-fallthrough")
 #add_compile_options("-fstack-clash-protection" "-fstack-protector-strong" )
 add_compile_options("-Werror=implicit" "-Werror=incompatible-pointer-types" "-Werror=int-conversion")
 add_compile_options("-fexceptions")
-#add_compile_options( "-fsanitize=address" "-fsanitize=leak"  "-fsanitize=undefined" "-fsanitize-address-use-after-scope"  )
-#add_compile_options("-fsanitize=undefined")
+#add_compile_options("-fsanitize=address" "-fsanitize=leak"  "-fsanitize=undefined" "-fsanitize-address-use-after-scope"  )
+
 
 add_link_options("-fopenmp")
 #add_link_options("-fstack-clash-protection" "-fstack-protector-strong" )

@@ -109,6 +109,9 @@ void textures_free ( textures_t t[static 1] ) {
     free ( t->correlation );
 }
 
+static inline unsigned int min(unsigned int a, unsigned int b) {
+    return a < b ? a : b;
+}
 void texture_set ( unsigned int num, GLuint texture_id[num], const flo_matrix_t *p, bool first ) {
     for ( unsigned int i = 0; i < num; i++ ) {
         glBindTexture ( GL_TEXTURE_2D, texture_id[i] );
@@ -120,11 +123,12 @@ void texture_set ( unsigned int num, GLuint texture_id[num], const flo_matrix_t 
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0 );
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0 );
+        const unsigned int width = min( TEXTURE_WIDTH, p->width);
         if ( first ) {
-            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, TEXTURE_WIDTH, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * TEXTURE_WIDTH );
+            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, TEXTURE_WIDTH, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * width );
         } else {
             glTexSubImage2D ( GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, p->height, GL_RED, GL_FLOAT,
-                              p->buf + i * TEXTURE_WIDTH );
+                              p->buf + i * width );
         }
     }
 #pragma GCC diagnostic pop
@@ -236,8 +240,9 @@ int main ( int argc, char *argv[] )
     /* SDL setup */
     SDL_SetHint ( SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0" );
     // Prevent DBus memory leak
+#ifdef SDL_HINT_SHUTDOWN_DBUS_ON_QUIT
     SDL_SetHint ( SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1" );
-
+#endif
     SDL_Init ( SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS );
 
     SDL_GL_SetAttribute ( SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG );
@@ -283,7 +288,10 @@ int main ( int argc, char *argv[] )
 
     stereo_result_t result = create_stereo_image_meow ( size, raw_file, fft_size, 0.1 );
 
-    unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH - 1;
+    unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH;
+    if (result.left->width % TEXTURE_WIDTH != 1) {
+        num_tex_line++;  // last (uncomplete) part
+    }
     textures_t textures = textures_alloc ( num_tex_line, TEXTURE_WIDTH, fft_size / 2 );
     texture_set ( num_tex_line, textures.left, result.left, true );
     texture_set ( num_tex_line, textures.right, result.right, true );

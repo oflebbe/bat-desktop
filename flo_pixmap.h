@@ -279,7 +279,7 @@ const uint8_t flo_font[] = {
 // should be deallocated with free
 flo_pixmap_t *flo_pixmap_create(unsigned int width, unsigned int height)
 {
-  size_t len = (long)width * (long)height;
+  size_t len = (size_t) width * (size_t) height;
   flo_pixmap_t *pixmap = (flo_pixmap_t *)calloc(1, sizeof(flo_pixmap_t) + sizeof(uint16_t) * len + 2000);
   if (pixmap == NULL)
   {
@@ -330,7 +330,7 @@ void flo_pixmap_draw_char(flo_pixmap_t *pixmap, unsigned int off_x, unsigned int
 
   for (uint8_t i = 0; i < flo_char_width; i++)
   { // Char o1af_pixmap = 5 columns
-    uint8_t line = flo_font[(int)c * flo_char_width + i];
+    uint8_t line = flo_font[c * flo_char_width + i];
     for (uint8_t j = 0; j < flo_char_height; j++, line >>= 1)
     {
       for (unsigned int x = 0; x < size_x; x++)
