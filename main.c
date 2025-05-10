@@ -54,67 +54,55 @@
 // Manage the subtextures of a texture
 typedef struct {
     unsigned int num;
-    unsigned int width;
+    unsigned int width;         // complete image
     unsigned int height;
-    float mag; /* magnification */
-    GLuint *left;
-    GLuint *right;
-    GLuint *correlation;
+    GLuint texture_id[];        // flexible array member of texture_ids
 } textures_t;
 
-textures_t textures_alloc ( unsigned int num, unsigned int width, unsigned int height ) {
-    GLuint *left = calloc ( num, sizeof ( GLuint ) );
-    if ( !left ) {
-        return ( textures_t ) {
-            0
-        };
+// return width of n-th texture tile (0..<num)
+unsigned int textures_width( const textures_t *t, unsigned int n) {
+    if (t == NULL) {
+        return 0;
     }
-
-    GLuint *right = calloc ( num, sizeof ( GLuint ) );
-    if ( !right ) {
-        free ( left );
-        return ( textures_t ) {
-            0
-        };
+    if (n+1 < t->num) {
+        return TEXTURE_WIDTH;
     }
-
-    GLuint *correlation = calloc ( num, sizeof ( GLuint ) );
-    if ( !correlation ) {
-        free ( left );
-        free ( right );
-        return ( textures_t ) {
-            0
-        };
-    }
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-    glGenTextures ( num, left );
-    glGenTextures ( num, right );
-    glGenTextures ( num, correlation );
-#pragma GCC diagnostic pop
-    return ( textures_t ) {
-        .num = num, .width = width, .height = height, .mag = 1.0f, .left = left, .right = right, .correlation = correlation
-    };
+    return t->width % TEXTURE_WIDTH;
 }
 
-void textures_free ( textures_t t[static 1] ) {
+textures_t *textures_alloc ( unsigned int num ) {
+    unsigned int len =  num * sizeof ( GLuint ) + sizeof( textures_t);
+    textures_t *self = malloc (len);
+    memset( self, 0, len);
+    self->num = num;
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-    glDeleteTextures ( t->num, t->left );
-    glDeleteTextures ( t->num, t->right );
-    glDeleteTextures ( t->num, t->correlation );
+    glGenTextures ( num, self->texture_id );
 #pragma GCC diagnostic pop
-    free ( t->left );
-    free ( t->right );
-    free ( t->correlation );
+    return self;
+}
+
+void textures_free ( textures_t *t ) {
+    if (t==NULL) {
+        return;
+    }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+    glDeleteTextures ( t->num, t->texture_id );
+#pragma GCC diagnostic pop
+    free( t);
 }
 
 static inline unsigned int min(unsigned int a, unsigned int b) {
     return a < b ? a : b;
 }
-void texture_set ( unsigned int num, GLuint texture_id[num], const flo_matrix_t *p, bool first ) {
-    for ( unsigned int i = 0; i < num; i++ ) {
-        glBindTexture ( GL_TEXTURE_2D, texture_id[i] );
+
+void texture_set ( textures_t *t, const flo_matrix_t *p, bool first ) {
+    t->width = p->width;
+    t->height = p->height;;
+    for ( unsigned int i = 0; i < t->num; i++ ) {
+        glBindTexture ( GL_TEXTURE_2D, t->texture_id[i] );
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
         glPixelStorei ( GL_PACK_ALIGNMENT, 4 );
@@ -123,20 +111,44 @@ void texture_set ( unsigned int num, GLuint texture_id[num], const flo_matrix_t 
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0 );
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0 );
-        const unsigned int width = min( TEXTURE_WIDTH, p->width);
+        const unsigned int t_width = textures_width( t, i); // last one is usually smaller
         if ( first ) {
-            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, TEXTURE_WIDTH, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * width );
+            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, t_width, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * p->width );
         } else {
-            glTexSubImage2D ( GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, p->height, GL_RED, GL_FLOAT,
-                              p->buf + i * width );
+            glTexSubImage2D ( GL_TEXTURE_2D, 0, 0, 0, t_width, p->height, GL_RED, GL_FLOAT,
+                              p->buf + i * p->width );
         }
     }
 #pragma GCC diagnostic pop
 }
 
-void textures_show ( struct nk_context *ctx, const textures_t t, float mag, bool black_white, float rot ) {
+void textures_display( struct nk_context *ctx, const textures_t *t, bool black_white, float rot )  {
+    for ( unsigned int i = 0; i < t->num; i++ ) {
+        nk_handle userdata = {0};
+        userdata.id = black_white ? 2 : 1;
+        nk_set_user_data ( ctx, userdata );
+        nk_image_color ( ctx, nk_image_id ( ( int ) t->texture_id[i] ), nk_rgba_f ( rot, 0., 0., 1. ) );
+    }
+}
+
+void textures_show ( struct nk_context *ctx, const textures_t *left, const textures_t *right, const textures_t *correlation, float mag, bool black_white, float rot ) {
+    static float previous_mag = 1.0f;
+    assert( left);
+    assert( right);
+    assert( correlation);
+    assert( left->height == right->height);
+    assert( left->width == right->width);
+    assert( left->num == right->num);
+    assert( left->height == correlation->height);
+    assert( left->width == correlation->width);
+    assert( left->num == correlation->num);
+
+
+    unsigned int height = left->height;
+    unsigned int width = left->width;
+    unsigned int num = left->num;
     nk_handle userdata = {0};
-    if ( nk_begin ( ctx, "Image Display", nk_rect ( 0, 0, WINDOW_WIDTH, t.height * 3 + 100 ),
+    if ( nk_begin ( ctx, "Image Display", nk_rect ( 0, 0, WINDOW_WIDTH, height * 3 + 100 ),
                     NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) ) {
         nk_set_user_data ( ctx, userdata );
         ctx->style.window.spacing = nk_vec2 ( 0.f, 0.f );
@@ -144,36 +156,22 @@ void textures_show ( struct nk_context *ctx, const textures_t t, float mag, bool
         // layout repeats itself, so only have to give it once
         struct nk_panel *layout = ctx->current->layout;
         // hack the horizontal slider to stay at current position when changing size
-        if ( layout->offset_x != NULL && mag != t.mag ) {
-            *layout->offset_x *= ( mag / t.mag );
+        if ( layout->offset_x != NULL && mag != previous_mag ) {
+            *layout->offset_x *= ( mag / previous_mag );
+            previous_mag = mag;
         }
-        nk_layout_row_static ( ctx, ( float ) t.height * mag, ( int ) ( t.width * mag ), ( int ) t.num );
+        nk_layout_row_static ( ctx, ( float ) height * mag, ( int ) ( width * mag ), ( int ) num );
 
-        nk_set_user_data ( ctx, userdata );
-        for ( unsigned int i = 0; i < t.num; i++ ) {
-            nk_handle userdata = {0};
-            userdata.id = black_white ? 2 : 1;
-            nk_set_user_data ( ctx, userdata );
-            nk_image_color ( ctx, nk_image_id ( ( int ) t.left[i] ), nk_rgba_f ( rot, 0., 0., 1. ) );
-        }
-        for ( unsigned int i = 0; i < t.num; i++ ) {
-            nk_handle userdata = {0};
-            userdata.id = black_white ? 2 : 1;
-            nk_set_user_data ( ctx, userdata );
-            nk_image_color ( ctx, nk_image_id ( ( int ) t.right[i] ), nk_rgba_f ( rot, 0., 0., 1. ) );
-        }
-        for ( unsigned int i = 0; i < t.num; i++ ) {
-            nk_handle userdata = {0};
-            userdata.id = 2;
-            nk_set_user_data ( ctx, userdata );
-            nk_image_color ( ctx, nk_image_id ( ( int ) t.correlation[i] ), nk_rgba_f ( 0., 0., 0., 1. ) );
-        }
+        textures_display( ctx, left, black_white, rot);
+        textures_display( ctx, right, black_white, rot);
+        textures_display( ctx, correlation, true, 0.);
+
         // new height: fontsize 20
-        nk_layout_row_static ( ctx, 20.0f, ( int ) t.width, ( int ) t.num );
+        nk_layout_row_static ( ctx, 20.0f, ( int ) width, ( int ) num );
         nk_set_user_data ( ctx, userdata );
-        for ( unsigned int i = 0; i < t.num; i++ ) {
+        for ( unsigned int i = 0; i <num; i++ ) {
             char sbuffer[20] = {0};
-            const int n = snprintf ( sbuffer, sizeof ( sbuffer ), "%f s", ( float ) ( i * t.width ) / 250000.0 * 512 * ( 1.0 - 0.1 ) );
+            const int n = snprintf ( sbuffer, sizeof ( sbuffer ), "%f s", ( float ) ( i * width ) / 250000.0 * 512 * ( 1.0 - 0.1 ) );
             nk_set_user_data ( ctx, userdata );
             nk_text ( ctx, sbuffer, n, NK_TEXT_LEFT );
         }
@@ -283,7 +281,6 @@ int main ( int argc, char *argv[] )
         /*nk_style_load_all_cursors(ctx, atlas->cursors);*/
         nk_style_set_font ( ctx, &droid->handle );
     }
-
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
 
     stereo_result_t result = create_stereo_image_meow ( size, raw_file, fft_size, 0.1 );
@@ -292,10 +289,14 @@ int main ( int argc, char *argv[] )
     if (result.left->width % TEXTURE_WIDTH != 1) {
         num_tex_line++;  // last (uncomplete) part
     }
-    textures_t textures = textures_alloc ( num_tex_line, TEXTURE_WIDTH, fft_size / 2 );
-    texture_set ( num_tex_line, textures.left, result.left, true );
-    texture_set ( num_tex_line, textures.right, result.right, true );
-    texture_set ( num_tex_line, textures.correlation, result.correlation, true );
+
+    textures_t *left = textures_alloc ( num_tex_line);
+    textures_t *right = textures_alloc ( num_tex_line);
+    textures_t *correlation = textures_alloc ( num_tex_line);
+
+    texture_set ( left, result.left, true );
+    texture_set ( right, result.right, true );
+    texture_set ( correlation, result.correlation, true );
 
     float mag = 1.0f;
     float lit = 0.8f;
@@ -331,8 +332,8 @@ int main ( int argc, char *argv[] )
 
         /* GUI */
         // Start a new UI frame
-        textures_show ( ctx, textures, mag, black_white, rot );
-        textures.mag = mag;
+        textures_show ( ctx, left, right, correlation, mag, black_white, rot );
+
 
         if ( nk_begin ( ctx, "Settings", nk_rect ( 0, fft_size / 2 * 3 + 100, 400, 400 ),
                         NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) ) {
@@ -384,7 +385,10 @@ cleanup:
     free ( result.right );
     free ( result.correlation );
 
-    textures_free ( &textures );
+    textures_free ( left );
+    textures_free ( right );
+    textures_free ( correlation);
+
     nk_sdl_shutdown();
     SDL_GL_DeleteContext ( glContext );
     SDL_DestroyWindow ( win );
