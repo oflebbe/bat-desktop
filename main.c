@@ -99,8 +99,8 @@ static inline unsigned int min(unsigned int a, unsigned int b) {
 }
 
 void texture_set ( textures_t *t, const flo_matrix_t *p, bool first ) {
-    t->width = p->width;
-    t->height = p->height;;
+    t->width = TEXTURE_WIDTH;
+    t->height = p->height;
     for ( unsigned int i = 0; i < t->num; i++ ) {
         glBindTexture ( GL_TEXTURE_2D, t->texture_id[i] );
 #pragma GCC diagnostic push
@@ -113,10 +113,10 @@ void texture_set ( textures_t *t, const flo_matrix_t *p, bool first ) {
         glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0 );
         const unsigned int t_width = textures_width( t, i); // last one is usually smaller
         if ( first ) {
-            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, t_width, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * p->width );
+            glTexImage2D ( GL_TEXTURE_2D, 0, GL_RED, t_width, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * t_width );
         } else {
             glTexSubImage2D ( GL_TEXTURE_2D, 0, 0, 0, t_width, p->height, GL_RED, GL_FLOAT,
-                              p->buf + i * p->width );
+                              p->buf + i * t_width );
         }
     }
 #pragma GCC diagnostic pop
