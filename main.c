@@ -101,7 +101,7 @@ static inline unsigned int min(unsigned int a, unsigned int b) {
 void texture_set ( textures_t *t, const flo_matrix_t *p, bool first ) {
     t->width = TEXTURE_WIDTH;
     t->height = p->height;
-    for ( unsigned int i = 0; i < t->num; i++ ) {
+    for ( size_t i = 0; i < t->num; i++ ) {
         glBindTexture ( GL_TEXTURE_2D, t->texture_id[i] );
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
@@ -123,7 +123,7 @@ void texture_set ( textures_t *t, const flo_matrix_t *p, bool first ) {
 }
 
 void textures_display( struct nk_context *ctx, const textures_t *t, bool black_white, float rot )  {
-    for ( unsigned int i = 0; i < t->num; i++ ) {
+    for ( size_t i = 0; i < t->num; i++ ) {
         nk_handle userdata = {0};
         userdata.id = black_white ? 2 : 1;
         nk_set_user_data ( ctx, userdata );
@@ -169,7 +169,7 @@ void textures_show ( struct nk_context *ctx, const textures_t *left, const textu
         // new height: fontsize 20
         nk_layout_row_static ( ctx, 20.0f, ( int ) width, ( int ) num );
         nk_set_user_data ( ctx, userdata );
-        for ( unsigned int i = 0; i <num; i++ ) {
+        for ( size_t i = 0; i <num; i++ ) {
             char sbuffer[20] = {0};
             const int n = snprintf ( sbuffer, sizeof ( sbuffer ), "%f s", ( float ) ( i * width ) / 250000.0 * 512 * ( 1.0 - 0.1 ) );
             nk_set_user_data ( ctx, userdata );
@@ -343,6 +343,7 @@ int main ( int argc, char *argv[] )
                 nk_label ( ctx, "Magnification:", NK_TEXT_LEFT );
                 nk_layout_row_push ( ctx, 200 );
                 nk_slider_float ( ctx, 1.0f, &mag, 4.0f, 0.01f );
+            
             }
             nk_layout_row_begin ( ctx, NK_STATIC, 50, 2 );
             {

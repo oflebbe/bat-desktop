@@ -39,7 +39,7 @@ typedef struct
 
 // allocates an flo_pixmap_t
 flo_pixmap_t *flo_pixmap_create(unsigned int width, unsigned int height);
-const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const unsigned char str[len],
+const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const char str[len],
                                           uint16_t color, uint16_t bg,
                                           uint8_t size_x, uint8_t size_y);
 
@@ -290,7 +290,7 @@ flo_pixmap_t *flo_pixmap_create(unsigned int width, unsigned int height)
   return pixmap;
 }
 
-const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const unsigned char str[len],
+const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const char str[len],
                                           uint16_t color, uint16_t bg,
                                           uint8_t size_x, uint8_t size_y)
 {

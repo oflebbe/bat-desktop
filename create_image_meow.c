@@ -25,7 +25,7 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
   {
     return (mono_result_t){0};
   }
-  for (unsigned int i = 0; i < fft_size; i++)
+  for (size_t i = 0; i < fft_size; i++)
   {
     window[i] = a0 - (1.0f - a0) * cosf((float) M_2_PI * (float) i / ((float) fft_size - 1.0f));
   }
@@ -36,7 +36,7 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
   const unsigned int width_px = (end / off / 2) * 2;
 
   flo_matrix_t *matrix = flo_matrix_create(width_px, height);
-#pragma omp parallel
+//#pragma omp parallel
   {
     float *fft_in = malloc(fft_size * sizeof(float));
     assert(fft_in);
@@ -52,20 +52,20 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
     // 0 - 125 kHz -> 512 Px
     // 15 / 125 * 512
 
-#pragma omp for
-    for (unsigned int col = 0; col < width_px; col++)
+//#pragma omp for
+    for (size_t col = 0; col < width_px; col++)
     {
-      unsigned int i = (col * off);
-      for (unsigned int j = 0; j < fft_size; j++)
+      size_t i = (col * off);
+      for (size_t j = 0; j < fft_size; j++)
       {
-        const unsigned int index = scale * (i + j) + offset;
+        const size_t index = scale * (i + j) + offset;
         assert(index < bufsize);
         // subtract 2048 for 12 bit sampling i.e. from 0 .. 4096
-        fft_in[j] = (buffer[index] - 2048) * window[j];
+        fft_in[j] = (buffer[index] -2048.0 ) * window[j];
       }
       meow_fft_real(fft_real, fft_in, fft_out);
 
-      for (unsigned int j = 0; j < height; j++)
+      for (size_t j = 0; j < height; j++)
       {
         const float power = fft_out[j].r * fft_out[j].r + fft_out[j].j * fft_out[j].j;
         float ang = (log10f(power) - 4) / (11 - 4);
@@ -103,7 +103,7 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
   {
     return (stereo_result_t){0};
   }
-  for (int i = 0; i < fft_size; i++)
+  for (size_t i = 0; i < fft_size; i++)
   {
     window[i] = a0 - (1.0f - a0) * cosf( 2.f * M_PI *  i / (fft_size - 1.0f));
   }
@@ -143,21 +143,21 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
     // 15 / 125 * 512
 
 #pragma omp for
-    for (unsigned int col = 0; col < width_px; col++)
+    for (size_t col = 0; col < width_px; col++)
     {
       unsigned int i = (col * off);
-      for (unsigned int j = 0; j < fft_size; j++)
+      for (size_t j = 0; j < fft_size; j++)
       {
         const unsigned int index = scale * (i + j);
         assert(index < bufsize - 1);
         // subtract 2048 for 12 bit sampling i.e. from 0 .. 4096
-        fft_in_left[j] = (buffer[index] - 2048) * window[j];
+        fft_in_left[j] = (buffer[index] - 2048.) * window[j];
         fft_in_right[j] = (buffer[index + 1] - 2048) * window[j];
       }
       meow_fft_real(fft_real, fft_in_left, fft_out_left);
       meow_fft_real(fft_real, fft_in_right, fft_out_right);
 
-      for (unsigned int j = 0; j < height; j++)
+      for (size_t j = 0; j < height; j++)
       {
         const float power = fft_out_left[j].r * fft_out_left[j].r + fft_out_left[j].j * fft_out_left[j].j;
         float ang = (log10f(power) - 4) / (11 - 4);
@@ -172,7 +172,7 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
         }
       }
 #pragma omp simd
-      for (unsigned int j = 0; j < height; j++)
+      for (size_t j = 0; j < height; j++)
       {
         const float power = fft_out_right[j].r * fft_out_right[j].r + fft_out_right[j].j * fft_out_right[j].j;
         float ang = (log10f(power) - 4) / (11 - 4);
@@ -187,13 +187,13 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
         }
       }
 #pragma omp simd
-      for (unsigned int j = 0; j < height; j++)
+      for (size_t j = 0; j < height; j++)
       {
         fft_out_left[j] = meow_mul_by_conjugate(fft_out_left[j], fft_out_right[j]);
       }
 
       meow_fft_real_i(fft_real, fft_out_left, fft_out_right, fft_out_correlation);
-      for (unsigned int j = 0; j < height; j++)
+      for (size_t j = 0; j < height; j++)
       {
         float ang = fft_out_correlation[j] / (398504800000.0f * 0.005f);
 
