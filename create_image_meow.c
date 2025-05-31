@@ -14,6 +14,9 @@
 
 mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int scale, unsigned int offset, unsigned int fft_size, float overlap_percent)
 {
+  assert( bufsize > 0);
+  assert( overlap_percent >= 0.0f && overlap_percent < 1.0f);
+  assert( fft_size > 0);
   if (offset >= scale)
   {
     return (mono_result_t){0};
@@ -27,7 +30,7 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
   }
   for (size_t i = 0; i < fft_size; i++)
   {
-    window[i] = a0 - (1.0f - a0) * cosf((float) M_2_PI * (float) i / ((float) fft_size - 1.0f));
+    window[i] = a0 - (1.0f - a0) * cosf(2.f * M_PI * (float) i / ((float) fft_size - 1.0f));
   }
 
   // last valid index
@@ -36,9 +39,10 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
   const unsigned int width_px = (end / off / 2) * 2;
 
   flo_matrix_t *matrix = flo_matrix_create(width_px, height);
-//#pragma omp parallel
+  assert(matrix);
+#pragma omp parallel
   {
-    float *fft_in = malloc(fft_size * sizeof(float));
+    float *fft_in = calloc(fft_size, sizeof(float));
     assert(fft_in);
     Meow_FFT_Complex *fft_out = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
     assert(fft_out);
@@ -52,7 +56,7 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
     // 0 - 125 kHz -> 512 Px
     // 15 / 125 * 512
 
-//#pragma omp for
+#pragma omp for
     for (size_t col = 0; col < width_px; col++)
     {
       size_t i = (col * off);
@@ -61,18 +65,18 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
         const size_t index = scale * (i + j) + offset;
         assert(index < bufsize);
         // subtract 2048 for 12 bit sampling i.e. from 0 .. 4096
-        fft_in[j] = (buffer[index] -2048.0 ) * window[j];
+        fft_in[j] = (buffer[index] - 2048.0f ) * window[j];
       }
       meow_fft_real(fft_real, fft_in, fft_out);
 
       for (size_t j = 0; j < height; j++)
       {
         const float power = fft_out[j].r * fft_out[j].r + fft_out[j].j * fft_out[j].j;
-        float ang = (log10f(power) - 4) / (11 - 4);
+        float ang = (log10f(power) - 4.0f) / (11.0f - 4.0f);
 
-        if (ang >= 0)
+        if (ang >= 0.0f)
         {
-          if (ang > 1.0)
+          if (ang > 1.0f)
           {
             ang = 1.0f;
           }
@@ -89,12 +93,11 @@ mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[buf
   return (mono_result_t){.channel = matrix};
 }
 
-stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int fft_size, float overlap_percent)
+stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int scale, unsigned offset, unsigned int fft_size, float overlap_percent)
 {
   assert( bufsize > 0);
   assert( overlap_percent >= 0.0f && overlap_percent < 1.0f);
   assert( fft_size > 0);
-  const unsigned int scale = 2;
   const unsigned int height = fft_size / 2;
   const float a0 = 25.f / 46.f;
 
@@ -117,8 +120,7 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
   flo_matrix_t *matrix_left = flo_matrix_create(width_px, height);
   flo_matrix_t *matrix_right = flo_matrix_create(width_px, height);
   flo_matrix_t *matrix_correlation = flo_matrix_create(width_px, height);
-  stereo_result_t result = {.left = matrix_left, .right = matrix_right, .correlation = matrix_correlation};
-
+  
 #pragma omp parallel
   {
     float *fft_in_left = calloc(fft_size, sizeof(float));
@@ -145,14 +147,14 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
 #pragma omp for
     for (size_t col = 0; col < width_px; col++)
     {
-      unsigned int i = (col * off);
+      size_t i = (col * off);
       for (size_t j = 0; j < fft_size; j++)
       {
-        const unsigned int index = scale * (i + j);
+        const unsigned int index = scale * (i + j) + offset;
         assert(index < bufsize - 1);
         // subtract 2048 for 12 bit sampling i.e. from 0 .. 4096
-        fft_in_left[j] = (buffer[index] - 2048.) * window[j];
-        fft_in_right[j] = (buffer[index + 1] - 2048) * window[j];
+        fft_in_left[j] = (buffer[index] - 2048.0f) * window[j];
+        fft_in_right[j] = (buffer[index + 1] - 2048.0f) * window[j];
       }
       meow_fft_real(fft_real, fft_in_left, fft_out_left);
       meow_fft_real(fft_real, fft_in_right, fft_out_right);
@@ -175,11 +177,11 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
       for (size_t j = 0; j < height; j++)
       {
         const float power = fft_out_right[j].r * fft_out_right[j].r + fft_out_right[j].j * fft_out_right[j].j;
-        float ang = (log10f(power) - 4) / (11 - 4);
+        float ang = (log10f(power) - 4.0f) / (11.0f - 4.0f);
 
-        if (ang >= 0)
+        if (ang >= 0.0f)
         {
-          if (ang > 1.0)
+          if (ang > 1.0f)
           {
             ang = 1.0f;
           }
@@ -217,5 +219,5 @@ stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t b
     free(fft_real);
   }
   free(window);
-  return result;
+  return (stereo_result_t){.left = matrix_left, .right = matrix_right, .correlation = matrix_correlation};
 }

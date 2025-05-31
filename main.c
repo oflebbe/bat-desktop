@@ -46,7 +46,7 @@
 
 #define WINDOW_WIDTH 2000
 
-#define STEREO 1
+#undef STEREO
 
 #define MAX_VERTEX_MEMORY 512 * 1024
 #define MAX_ELEMENT_MEMORY 128 * 1024
@@ -134,15 +134,14 @@ void textures_display( struct nk_context *ctx, const textures_t *t, bool black_w
 void textures_show ( struct nk_context *ctx, const textures_t *left, const textures_t *right, const textures_t *correlation, float mag, bool black_white, float rot ) {
     static float previous_mag = 1.0f;
     assert( left);
-    assert( right);
-    assert( correlation);
+#ifdef STEREO
     assert( left->height == right->height);
     assert( left->width == right->width);
     assert( left->num == right->num);
     assert( left->height == correlation->height);
     assert( left->width == correlation->width);
     assert( left->num == correlation->num);
-
+#endif
 
     unsigned int height = left->height;
     unsigned int width = left->width;
@@ -163,9 +162,12 @@ void textures_show ( struct nk_context *ctx, const textures_t *left, const textu
         nk_layout_row_static ( ctx, ( float ) height * mag, ( int ) ( width * mag ), ( int ) num );
 
         textures_display( ctx, left, black_white, rot);
-        textures_display( ctx, right, black_white, rot);
-        textures_display( ctx, correlation, true, 0.);
-
+        if (right != NULL) {
+            textures_display( ctx, right, black_white, rot);
+        }
+        if (correlation != NULL) {
+            textures_display( ctx, correlation, true, 0.);
+        }
         // new height: fontsize 20
         nk_layout_row_static ( ctx, 20.0f, ( int ) width, ( int ) num );
         nk_set_user_data ( ctx, userdata );
@@ -282,22 +284,34 @@ int main ( int argc, char *argv[] )
         nk_style_set_font ( ctx, &droid->handle );
     }
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
-
-    stereo_result_t result = create_stereo_image_meow ( size, raw_file, fft_size, 0.1 );
-
+#ifdef STEREO
+    stereo_result_t result = create_stereo_image_meow ( size, raw_file, 2, 0, fft_size, 0.1 );
     unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH;
     if (result.left->width % TEXTURE_WIDTH != 1) {
         num_tex_line++;  // last (uncomplete) part
     }
+    #else
+    mono_result_t result = create_image_meow( size, raw_file, 2, 0, fft_size, 0.1 );
+    unsigned int num_tex_line = result.channel->width / TEXTURE_WIDTH;
+    if (result.channel->width % TEXTURE_WIDTH != 1) {
+        num_tex_line++;  // last (uncomplete) part
+    }
+
+#endif
 
     textures_t *left = textures_alloc ( num_tex_line);
+#ifdef STEREO
     textures_t *right = textures_alloc ( num_tex_line);
     textures_t *correlation = textures_alloc ( num_tex_line);
+#endif
 
+#ifdef STEREO
     texture_set ( left, result.left, true );
     texture_set ( right, result.right, true );
     texture_set ( correlation, result.correlation, true );
-
+#else
+    texture_set ( left, result.channel, true );
+#endif
     float mag = 1.0f;
     float lit = 0.8f;
     float rot = 0.0f;
@@ -327,13 +341,20 @@ int main ( int argc, char *argv[] )
 
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end ( ctx );
+#ifdef STEREO
         unsigned int height = result.left->height;
+#else
+        unsigned int height = result.channel->height;
+#endif
         // unsigned int width = result.left->width;
 
         /* GUI */
         // Start a new UI frame
+#ifdef STEREO
         textures_show ( ctx, left, right, correlation, mag, black_white, rot );
-
+#else
+        textures_show ( ctx, left, NULL, NULL, mag, black_white, rot );
+#endif
 
         if ( nk_begin ( ctx, "Settings", nk_rect ( 0, fft_size / 2 * 3 + 100, 400, 400 ),
                         NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) ) {
@@ -382,6 +403,7 @@ int main ( int argc, char *argv[] )
     }
 
 cleanup:
+#ifdef STEREO
     free ( result.left );
     free ( result.right );
     free ( result.correlation );
@@ -389,6 +411,10 @@ cleanup:
     textures_free ( left );
     textures_free ( right );
     textures_free ( correlation);
+#else
+    free ( result.channel );
+    textures_free ( left );
+#endif
 
     nk_sdl_shutdown();
     SDL_GL_DeleteContext ( glContext );

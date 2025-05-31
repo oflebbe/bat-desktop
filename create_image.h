@@ -17,9 +17,8 @@ typedef struct
 } stereo_result_t;
 
 
-
 mono_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int scale, unsigned int offset, unsigned int fft_size, float overlap_percent);
-stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize], unsigned int fft_size, float overlap_percent);
+stereo_result_t create_stereo_image_meow(unsigned long bufsize, const uint16_t buffer[bufsize],  unsigned int scale, unsigned int offset, unsigned int fft_size, float overlap_percent);
 
 #endif
 
