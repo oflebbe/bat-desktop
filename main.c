@@ -42,129 +42,67 @@
 #include "flo_file.h"
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
-#define TEXTURE_WIDTH 4096
+
 
 #define WINDOW_WIDTH 2000
 
-#undef STEREO
+#include "sub_texture.h"
 
 #define MAX_VERTEX_MEMORY 512 * 1024
 #define MAX_ELEMENT_MEMORY 128 * 1024
 
-// Manage the subtextures of a texture
-typedef struct
-{
-    unsigned int num;
-    unsigned int width; // complete image
-    unsigned int height;
-    GLuint texture_id[]; // flexible array member of texture_ids
+
+typedef struct {
+    sub_texture_t *left;
+    sub_texture_t *right;
+    sub_texture_t *correlation;
 } textures_t;
-
-// return width of n-th texture tile (0..<num)
-unsigned int textures_width(const textures_t *t, unsigned int n)
-{
-    if (t == NULL)
-    {
-        return 0;
-    }
-    if (n + 1 < t->num)
-    {
-        return TEXTURE_WIDTH;
-    }
-    return t->width % TEXTURE_WIDTH;
-}
-
-textures_t *textures_alloc(unsigned int num)
-{
-    unsigned int len = num * sizeof(GLuint) + sizeof(textures_t);
-    textures_t *self = malloc(len);
-    memset(self, 0, len);
-    self->num = num;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-    glGenTextures(num, self->texture_id);
-#pragma GCC diagnostic pop
-    return self;
-}
-
-void textures_free(textures_t *t)
-{
-    if (t == NULL)
-    {
-        return;
-    }
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-    glDeleteTextures(t->num, t->texture_id);
-#pragma GCC diagnostic pop
-    free(t);
-}
 
 static inline unsigned int min(unsigned int a, unsigned int b)
 {
     return a < b ? a : b;
 }
 
-void texture_set(textures_t *t, const flo_matrix_t *p, bool first)
-{
-    t->width = TEXTURE_WIDTH;
-    t->height = p->height;
-    for (size_t i = 0; i < t->num; i++)
-    {
-        glBindTexture(GL_TEXTURE_2D, t->texture_id[i]);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-        glPixelStorei(GL_PACK_ALIGNMENT, 4);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, p->width);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-        const unsigned int t_width = textures_width(t, i); // last one is usually smaller
-        if (first)
-        {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, t_width, p->height, 0, GL_RED, GL_FLOAT, p->buf + i * t_width);
-        }
-        else
-        {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, t_width, p->height, GL_RED, GL_FLOAT,
-                            p->buf + i * t_width);
-        }
+textures_t result2textures( const stereo_result_t s) {
+    unsigned int width = s.left->width;
+    sub_texture_t *left = sub_texture_alloc(width);
+    sub_texture_set(left, s.left);
+    sub_texture_t *right = NULL;
+    if (s.right) {
+        right = sub_texture_alloc(width);
+        sub_texture_set(right, s.right);
     }
-#pragma GCC diagnostic pop
+    sub_texture_t *correlation = NULL;
+    if (s.correlation) {
+        correlation = sub_texture_alloc(width);
+        sub_texture_set(left, s.correlation);
+    }
+    return (textures_t){.left = left, .right = right, .correlation = correlation};
 }
 
-void textures_display(struct nk_context *ctx, const textures_t *t, bool black_white, float rot)
-{
-    for (size_t i = 0; i < t->num; i++)
-    {
-        nk_handle userdata = {0};
-        userdata.id = black_white ? 2 : 1;
-        nk_set_user_data(ctx, userdata);
-        nk_image_color(ctx, nk_image_id((int)t->texture_id[i]), nk_rgba_f(rot, 0., 0., 1.));
-    }
-}
 
-void textures_show(struct nk_context *ctx, const textures_t *left, const textures_t *right, const textures_t *correlation, float mag, bool black_white, float rot)
+void textures_show(struct nk_context *ctx, textures_t t, float mag, bool black_white, float rot)
 {
     static float previous_mag = 1.0f;
-    assert(left);
-#ifdef STEREO
-    assert(left->height == right->height);
-    assert(left->width == right->width);
-    assert(left->num == right->num);
-    assert(left->height == correlation->height);
-    assert(left->width == correlation->width);
-    assert(left->num == correlation->num);
-#endif
 
-    unsigned int height = left->height;
-    unsigned int width = left->width;
-    unsigned int num = left->num;
+    assert(t.left);
+    assert((t.right == NULL && t.correlation == NULL) || ( (t.right != NULL && t.correlation != NULL)));
+    if (t.right != NULL) {
+        assert(t.left->height == t.right->height);
+        assert(t.left->width == t.right->width);
+        assert(t.left->num == t.right->num);
+        assert(t.left->height == t.correlation->height);
+        assert(t.left->width == t.correlation->width);
+        assert(t.left->num == t.correlation->num);
+    }
+
+    unsigned int height = t.left->height;
+    unsigned int width = t.left->width;
     nk_handle userdata = {0};
-    if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, height * 3 + 100),
-                 NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    unsigned int num_height = t.right == NULL ? 1 : 3;
+
+    if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, height * num_height + 100),
+        NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         nk_set_user_data(ctx, userdata);
         ctx->style.window.spacing = nk_vec2(0.f, 0.f);
@@ -177,33 +115,38 @@ void textures_show(struct nk_context *ctx, const textures_t *left, const texture
             *layout->offset_x *= (mag / previous_mag);
             previous_mag = mag;
         }
-        nk_layout_row_static(ctx, (float)height * mag, (int)(width * mag), (int)num);
 
-        textures_display(ctx, left, black_white, rot);
-        if (right != NULL)
-        {
-            textures_display(ctx, right, black_white, rot);
-        }
-        if (correlation != NULL)
-        {
-            textures_display(ctx, correlation, true, 0.);
-        }
+        sub_texture_display(ctx, t.left, black_white, mag, rot);
+        sub_texture_display(ctx, t.right, black_white, mag, rot);
+        sub_texture_display(ctx, t.correlation, true, mag, 0.);
+
         // new height: fontsize 20
-        nk_layout_row_static(ctx, 20.0f, (int)width, (int)num);
+        size_t num_label = 100;
+        nk_layout_row_static(ctx, 20.0f, WINDOW_WIDTH, num_label );
         nk_set_user_data(ctx, userdata);
-        for (size_t i = 0; i < num; i++)
+        for (size_t i = 0; i < num_label; i++)
         {
             char sbuffer[20] = {0};
             const int n = snprintf(sbuffer, sizeof(sbuffer), "%f s", (float)(i * width) / 250000.0 * 512 * (1.0 - 0.1));
             nk_set_user_data(ctx, userdata);
             nk_text(ctx, sbuffer, n, NK_TEXT_LEFT);
         }
-        /* struct nk_window *win = ctx->current;
-         struct nk_command_buffer *buf = &win->buffer;
+        struct nk_window *win = ctx->current;
+        struct nk_command_buffer *buf = &win->buffer;
 
-         nk_fill_rect ( buf, nk_rect ( 100, 100, 200, 200 ), 2, nk_rgb_f ( 0.5, 0., 0.5 ) ); */
+        nk_fill_rect ( buf, nk_rect ( 100, 100, 200, 200 ), 2, nk_rgb_f ( 0.5, 0., 0.5 ) );
     }
     nk_end(ctx);
+}
+
+void textures_free( textures_t t) {
+    free( t.left);
+    if (t.right) {
+        free(t.right);
+    }
+    if (t.correlation) {
+        free(t.correlation);
+    }
 }
 
 /* ===============================================================
@@ -223,10 +166,10 @@ int main(int argc, char *argv[])
 
     int win_width, win_height;
     int running = 1;
-#ifdef _WIN32
+    #ifdef _WIN32
     int argc = 1;
     char *argv[] = {"capture.raw"};
-#endif
+    #endif
     if (argc < 2)
     {
         fprintf(stderr, "Need 1 filename argument\n");
@@ -265,9 +208,9 @@ int main(int argc, char *argv[])
     /* SDL setup */
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
     // Prevent DBus memory leak
-#ifdef SDL_HINT_SHUTDOWN_DBUS_ON_QUIT
+    #ifdef SDL_HINT_SHUTDOWN_DBUS_ON_QUIT
     SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
-#endif
+    #endif
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
@@ -310,43 +253,13 @@ int main(int argc, char *argv[])
         nk_style_set_font(ctx, &droid->handle);
     }
 
-
     bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
-#ifdef STEREO
-    stereo_result_t result = create_stereo_image_meow(size, raw_file, 2, 0, fft_size, 0.1);
-    unsigned int num_tex_line = result.left->width / TEXTURE_WIDTH;
-    if (result.left->width % TEXTURE_WIDTH != 1)
-    {
-        num_tex_line++; // last (uncomplete) part
-    }
-#else
-    matrix_result_t result = create_image_meow(size, raw_file, 2, 0, fft_size, 0.1, false);
-    unsigned int num_tex_line = result.mono.channel->width / TEXTURE_WIDTH;
-    if (result.mono.channel->width % TEXTURE_WIDTH != 1)
-    {
-        num_tex_line++; // last (uncomplete) part
-    }
+    stereo_result_t result = create_image_meow(size, raw_file, 2, 0, fft_size, 0.1, false);
+    textures_t tex = result2textures( result);
 
-#endif
-
-    textures_t *left = textures_alloc(num_tex_line);
-#ifdef STEREO
-    textures_t *right = textures_alloc(num_tex_line);
-    textures_t *correlation = textures_alloc(num_tex_line);
-#endif
-
-#ifdef STEREO
-    texture_set(left, result.left, true);
-    texture_set(right, result.right, true);
-    texture_set(correlation, result.correlation, true);
-#else
-    texture_set(left, result.mono.channel, true);
-#endif
     float mag = 1.0f;
-    float lit = 0.8f;
     float rot = 0.0f;
     bool next_wait = false;
-    bool first = true;
     nk_bool black_white = false;
     // for adapting the scrollbar when changing mag
     while (running)
@@ -376,27 +289,21 @@ int main(int argc, char *argv[])
             }
             next_wait = true;
         }
-        
+
 
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
-#ifdef STEREO
         unsigned int height = result.left->height;
-#else
-        unsigned int height = result.mono.channel->height;
-#endif
         // unsigned int width = result.left->width;
 
         /* GUI */
         // Start a new UI frame
-#ifdef STEREO
-        textures_show(ctx, left, right, correlation, mag, black_white, rot);
-#else
-        textures_show(ctx, left, NULL, NULL, mag, black_white, rot);
-#endif
+        textures_show(ctx, tex, mag, black_white, rot);
 
-        if (nk_begin(ctx, "Settings", nk_rect(0, fft_size / 2 * 3 + 100, 400, 400),
-                     NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+        unsigned int num = tex.right == NULL ? 1 : 3;
+
+        if (nk_begin(ctx, "Settings", nk_rect(0, fft_size / 2 * num + 100, 400, 400),
+            NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
         {
             nk_layout_row_begin(ctx, NK_STATIC, 50, 2);
             {
@@ -443,19 +350,10 @@ int main(int argc, char *argv[])
         SDL_GL_SwapWindow(win);
     }
 
-cleanup:
-#ifdef STEREO
-    free(result.left);
-    free(result.right);
-    free(result.correlation);
+    cleanup:
+    stereo_result_free(result);
+    textures_free(tex);
 
-    textures_free(left);
-    textures_free(right);
-    textures_free(correlation);
-#else
-    free(result.mono.channel);
-    textures_free(left);
-#endif
 
     nk_sdl_shutdown();
     SDL_GL_DeleteContext(glContext);

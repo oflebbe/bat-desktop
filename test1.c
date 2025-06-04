@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -40,9 +41,6 @@ typedef struct image_params
     int scale;
     float overlap_percent;
 } image_params_t;
-
-
-
 
 
 uint16_t *raw_file = NULL;

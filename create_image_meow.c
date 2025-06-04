@@ -171,3 +171,15 @@ stereo_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[b
 
   return (stereo_result_t){.left = matrix_left, .right = matrix_right, .correlation = matrix_correlation};
 }
+
+void stereo_result_free(stereo_result_t r) {
+  assert(r.left);
+  free(r.left);
+  if (r.right) {
+    free(r.right);
+  }
+  if (r.correlation) {
+    free(r.correlation);
+  }
+}
+
