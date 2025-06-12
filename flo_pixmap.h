@@ -44,7 +44,7 @@ const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const char str[len],
                                           uint8_t size_x, uint8_t size_y);
 
 void flo_pixmap_draw_char(flo_pixmap_t *pixmap, unsigned int off_x, unsigned int off_y,
-                          unsigned char c, uint16_t color, uint16_t bg,
+                          char c, uint16_t color, uint16_t bg,
                           unsigned int size_x, unsigned int size_y);
 
 __attribute__((always_inline)) inline uint16_t flo_swap(uint16_t color)
@@ -281,10 +281,7 @@ flo_pixmap_t *flo_pixmap_create(unsigned int width, unsigned int height)
 {
   size_t len = (size_t) width * (size_t) height;
   flo_pixmap_t *pixmap = (flo_pixmap_t *)calloc(1, sizeof(flo_pixmap_t) + sizeof(uint16_t) * len + 2000);
-  if (pixmap == NULL)
-  {
-    abort();
-  }
+  assert(pixmap);
   *pixmap = (flo_pixmap_t){.width = width, .height = height, .len = len};
 
   return pixmap;
@@ -296,10 +293,8 @@ const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const char str[len],
 {
   flo_pixmap_t *pixmap = flo_pixmap_create(len * (flo_char_width + flo_char_space) * size_x,
                                            flo_char_height * size_y);
-  if (pixmap == NULL)
-  {
-    abort();
-  }
+  assert(pixmap);
+
   for (unsigned int i = 0; i < len; i++)
   {
     flo_pixmap_draw_char(
@@ -310,7 +305,7 @@ const flo_pixmap_t *flo_pixmap_create_str(unsigned int len, const char str[len],
 }
 
 void flo_pixmap_draw_char(flo_pixmap_t *pixmap, unsigned int off_x, unsigned int off_y,
-                          unsigned char c, uint16_t color, uint16_t bg,
+                          char c, uint16_t color, uint16_t bg,
                           unsigned int size_x, unsigned int size_y)
 {
   assert(size_x >= 1);
@@ -322,15 +317,18 @@ void flo_pixmap_draw_char(flo_pixmap_t *pixmap, unsigned int off_x, unsigned int
     abort();
   }
 
-  if (c >= 176)
-    c++; // Handle 'classic' charset behavior
+  unsigned char cpos = (unsigned char)c;
+
+  if (cpos >= 176)
+    cpos++; // Handle 'classic' charset behavior
 
   color = flo_swap(color);
   bg = flo_swap(bg);
 
   for (uint8_t i = 0; i < flo_char_width; i++)
   { // Char o1af_pixmap = 5 columns
-    uint8_t line = flo_font[c * flo_char_width + i];
+    assert( cpos*flo_char_width+i < sizeof( flo_font));
+    uint8_t line = flo_font[cpos * flo_char_width + i];
     for (uint8_t j = 0; j < flo_char_height; j++, line >>= 1)
     {
       for (unsigned int x = 0; x < size_x; x++)

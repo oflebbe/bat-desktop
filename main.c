@@ -53,9 +53,9 @@
 
 
 typedef struct {
-    sub_texture_t *left;
-    sub_texture_t *right;
-    sub_texture_t *correlation;
+    const sub_texture_t *left;
+    const sub_texture_t *right;
+    const sub_texture_t *correlation;
 } textures_t;
 
 static inline unsigned int min(unsigned int a, unsigned int b)
@@ -63,20 +63,11 @@ static inline unsigned int min(unsigned int a, unsigned int b)
     return a < b ? a : b;
 }
 
-textures_t result2textures( const stereo_result_t s) {
-    unsigned int width = s.left->width;
-    sub_texture_t *left = sub_texture_alloc(width);
-    sub_texture_set(left, s.left);
-    sub_texture_t *right = NULL;
-    if (s.right) {
-        right = sub_texture_alloc(width);
-        sub_texture_set(right, s.right);
-    }
-    sub_texture_t *correlation = NULL;
-    if (s.correlation) {
-        correlation = sub_texture_alloc(width);
-        sub_texture_set(left, s.correlation);
-    }
+textures_t textures_init( const stereo_result_t s) {
+    const sub_texture_t *left = sub_texture_init( s.left);
+    const sub_texture_t *right = sub_texture_init( s.right);
+    const sub_texture_t *correlation = sub_texture_init( s.correlation);
+    
     return (textures_t){.left = left, .right = right, .correlation = correlation};
 }
 
@@ -86,8 +77,8 @@ void textures_show(struct nk_context *ctx, textures_t t, float mag, bool black_w
     static float previous_mag = 1.0f;
 
     assert(t.left);
-    assert((t.right == NULL && t.correlation == NULL) || ( (t.right != NULL && t.correlation != NULL)));
-    if (t.right != NULL) {
+    assert((!t.right && !t.correlation) || ( (t.right && t.correlation)));
+    if (t.right) {
         assert(t.left->height == t.right->height);
         assert(t.left->width == t.right->width);
         assert(t.left->num == t.right->num);
@@ -98,19 +89,19 @@ void textures_show(struct nk_context *ctx, textures_t t, float mag, bool black_w
 
     unsigned int height = t.left->height;
     unsigned int width = t.left->width;
-    nk_handle userdata = {0};
-    unsigned int num_height = t.right == NULL ? 1 : 3;
+
+    unsigned int num_height = t.right? 3:1;
 
     if (nk_begin(ctx, "Image Display", nk_rect(0, 0, WINDOW_WIDTH, height * num_height + 100),
         NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
-        nk_set_user_data(ctx, userdata);
+        nk_set_user_data(ctx, (nk_handle){.ptr = nullptr});
         ctx->style.window.spacing = nk_vec2(0.f, 0.f);
         // Use nk_image to display the texture
         // layout repeats itself, so only have to give it once
         struct nk_panel *layout = ctx->current->layout;
         // hack the horizontal slider to stay at current position when changing size
-        if (layout->offset_x != NULL && mag != previous_mag)
+        if (layout->offset_x && mag != previous_mag)
         {
             *layout->offset_x *= (mag / previous_mag);
             previous_mag = mag;
@@ -123,12 +114,11 @@ void textures_show(struct nk_context *ctx, textures_t t, float mag, bool black_w
         // new height: fontsize 20
         size_t num_label = 100;
         nk_layout_row_static(ctx, 20.0f, WINDOW_WIDTH, num_label );
-        nk_set_user_data(ctx, userdata);
         for (size_t i = 0; i < num_label; i++)
         {
             char sbuffer[20] = {0};
             const int n = snprintf(sbuffer, sizeof(sbuffer), "%f s", (float)(i * width) / 250000.0 * 512 * (1.0 - 0.1));
-            nk_set_user_data(ctx, userdata);
+            nk_set_user_data(ctx, (nk_handle){.ptr = nullptr});
             nk_text(ctx, sbuffer, n, NK_TEXT_LEFT);
         }
         struct nk_window *win = ctx->current;
@@ -139,14 +129,10 @@ void textures_show(struct nk_context *ctx, textures_t t, float mag, bool black_w
     nk_end(ctx);
 }
 
-void textures_free( textures_t t) {
-    free( t.left);
-    if (t.right) {
-        free(t.right);
-    }
-    if (t.correlation) {
-        free(t.correlation);
-    }
+void textures_release( textures_t t) {
+    sub_texture_release( t.left);
+    sub_texture_release( t.right);
+    sub_texture_release(t.correlation);
 }
 
 /* ===============================================================
@@ -160,12 +146,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 int main(int argc, char *argv[])
 #endif
 {
-    /* Platform */
-    SDL_Window *win;
-    SDL_GLContext glContext;
-
-    int win_width, win_height;
-    int running = 1;
     #ifdef _WIN32
     int argc = 1;
     char *argv[] = {"capture.raw"};
@@ -199,10 +179,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    /* GUI */
-    struct nk_context *ctx = NULL;
-    struct nk_colorf bg;
-
     unsigned int fft_size = 512;
 
     /* SDL setup */
@@ -218,18 +194,19 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    win = SDL_CreateWindow("Bat Desktop",
+    SDL_Window *win = SDL_CreateWindow("Bat Desktop",
                            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                            WINDOW_WIDTH, (int)fft_size / 2, SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    glContext = SDL_GL_CreateContext(win);
+    SDL_GLContext glContext = SDL_GL_CreateContext(win);
     int version = gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
     printf("GL %d.%d\n", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
+    int win_width, win_height;
     SDL_GetWindowSize(win, &win_width, &win_height);
-    int rw = 0, rh = 0;
     SDL_Renderer *render = SDL_GetRenderer(win);
+
+    int rw = 0, rh = 0;
     SDL_GetRendererOutputSize(render, &rw, &rh);
-    // const char *ptr = SDL_GetError();
 
     float widthScale = (float)rw / (float)win_width;
     float heightScale = (float)rh / (float)win_height;
@@ -240,11 +217,11 @@ int main(int argc, char *argv[])
 
     SDL_RenderSetScale(render, widthScale, heightScale);
 
-    ctx = nk_sdl_init(win);
+     struct nk_context *ctx = nk_sdl_init(win);
     /* Load Fonts: if none of these are loaded a default font will be used  */
     /* Load Cursor: if you uncomment cursor loading please hide the cursor */
     {
-        struct nk_font_atlas *atlas;
+        struct nk_font_atlas *atlas = nullptr;
 
         nk_sdl_font_stash_begin(&atlas);
         struct nk_font *droid = nk_font_atlas_add_from_file(atlas, "DroidSans.ttf", 20, 0);
@@ -252,17 +229,16 @@ int main(int argc, char *argv[])
         /*nk_style_load_all_cursors(ctx, atlas->cursors);*/
         nk_style_set_font(ctx, &droid->handle);
     }
-
-    bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
+    struct nk_colorf bg = {.r = 0.10f, .g = 0.18f, .b = 0.24f, .a = 1.0f};
     stereo_result_t result = create_image_meow(size, raw_file, 2, 0, fft_size, 0.1, false);
-    textures_t tex = result2textures( result);
+    textures_t tex = textures_init( result);
 
     float mag = 1.0f;
     float rot = 0.0f;
     bool next_wait = false;
     nk_bool black_white = false;
     // for adapting the scrollbar when changing mag
-    while (running)
+    for(;;)
     {
         /* Input */
         SDL_Event evt;
@@ -270,9 +246,10 @@ int main(int argc, char *argv[])
         if (next_wait)
         {
             SDL_WaitEvent(&evt);
-            if (evt.type == SDL_QUIT)
+            if (evt.type == SDL_QUIT|| (evt.type == SDL_WINDOWEVENT &&
+               evt.window.event == SDL_WINDOWEVENT_CLOSE))
             {
-                goto cleanup;
+                break;
             }
             nk_sdl_handle_event(&evt);
             next_wait = false;
@@ -283,13 +260,12 @@ int main(int argc, char *argv[])
             {
                 if (evt.type == SDL_QUIT)
                 {
-                    goto cleanup;
+                    break;
                 }
                 nk_sdl_handle_event(&evt);
             }
             next_wait = true;
         }
-
 
         nk_sdl_handle_grab(); /* optional grabbing behavior */
         nk_input_end(ctx);
@@ -300,7 +276,7 @@ int main(int argc, char *argv[])
         // Start a new UI frame
         textures_show(ctx, tex, mag, black_white, rot);
 
-        unsigned int num = tex.right == NULL ? 1 : 3;
+        unsigned int num = tex.right ? 3:1;
 
         if (nk_begin(ctx, "Settings", nk_rect(0, fft_size / 2 * num + 100, 400, 400),
             NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
@@ -350,9 +326,8 @@ int main(int argc, char *argv[])
         SDL_GL_SwapWindow(win);
     }
 
-    cleanup:
-    stereo_result_free(result);
-    textures_free(tex);
+    stereo_result_release(result);
+    textures_release(tex);
 
 
     nk_sdl_shutdown();

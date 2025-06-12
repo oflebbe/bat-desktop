@@ -17,20 +17,20 @@ const char *flo_readall(const char *fn)
   FILE *fp = fopen(fn, "r");
   if (!fp)
   {
-    return NULL;
+    return nullptr;
   }
   size_t sz = flo_filesize(fp);
   char *str = calloc(sz + 1, 1);
   if (!str)
   {
-    return NULL;
+    return nullptr;
   }
   if (sz != fread(str, 1, sz, fp))
   {
     free(str);
-    return NULL;
+    return nullptr;
   }
-  return str;
+  return nullptr;
 }
 
 size_t flo_filesize(FILE *fp)
@@ -51,30 +51,30 @@ size_t flo_filesize(FILE *fp)
 // read whole file. returns buffer and size
 const uint8_t *flo_readfile(FILE *fin, size_t *sz)
 {
-  if (sz == NULL)
+  if (!sz)
   {
-    return NULL;
+    return nullptr;
   }
   if (!fin)
   {
-    return NULL;
+    return nullptr;
   }
 
   size_t pos = *sz = flo_filesize(fin);
   if (*sz == 0)
   {
-    return NULL;
+    return nullptr;
   }
   uint8_t *filebuf = calloc(pos, 1);
   if (!filebuf)
   {
-    return NULL;
+    return nullptr;
   }
 
   if (pos != fread(filebuf, 1, pos, fin))
   {
     free(filebuf);
-    return NULL;
+    return nullptr;
   }
   return filebuf;
 }
@@ -85,13 +85,9 @@ const uint8_t *flo_readfile(FILE *fin, size_t *sz)
 const uint8_t *flo_mapfile(FILE *fin, size_t *sz)
 {
 
-  if (sz == NULL)
+  if (!sz || !fin)
   {
-    return NULL;
-  }
-  if (!fin)
-  {
-    return NULL;
+    return nilptr;
   }
   const size_t pos = *sz = flo_filesize(fin);
   const int fd = fileno(fin);
@@ -108,18 +104,14 @@ int flo_unmapfile(const uint8_t *buf, size_t sz)
   #include <sys/mman.h>
 const uint8_t *flo_mapfile(FILE *fin, size_t *sz)
 {
-  if (sz == NULL)
+  if (!sz || !fin)
   {
-    return NULL;
-  }
-  if (!fin)
-  {
-    return NULL;
+    return nullptr;
   }
   size_t pos = *sz = flo_filesize(fin);
 
   int fd = fileno(fin);
-  uint8_t *filebuf = mmap(NULL, pos, PROT_READ, MAP_PRIVATE, fd, 0);
+  const uint8_t *filebuf = mmap(NULL, pos, PROT_READ, MAP_PRIVATE, fd, 0);
   return filebuf;
 }
 

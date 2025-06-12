@@ -37,8 +37,8 @@ stereo_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[b
   const unsigned int width_px = (end / off / 2) * 2;
 
   flo_matrix_t *matrix_left = flo_matrix_create(width_px, height);
-  flo_matrix_t *matrix_right = NULL;
-  flo_matrix_t *matrix_correlation = NULL;
+  flo_matrix_t *matrix_right = nullptr;
+  flo_matrix_t *matrix_correlation = nullptr;
   if (stereo)
   {
     matrix_right = flo_matrix_create(width_px, height);
@@ -53,9 +53,9 @@ stereo_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[b
     Meow_FFT_Complex *fft_out_left = malloc((fft_size / 2 + 1) * sizeof(Meow_FFT_Complex));
     assert(fft_out_left);
 
-    float *fft_in_right = NULL;
-    Meow_FFT_Complex *fft_out_right = NULL;
-    float *fft_out_correlation = NULL;
+    float *fft_in_right = nullptr;
+    Meow_FFT_Complex *fft_out_right = nullptr;
+    float *fft_out_correlation = nullptr;
 
     if (stereo)
     {
@@ -67,7 +67,7 @@ stereo_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[b
       assert(fft_out_correlation);
     }
 
-    size_t workset_bytes = meow_fft_generate_workset_real(fft_size, NULL);
+    size_t workset_bytes = meow_fft_generate_workset_real(fft_size, nullptr);
     Meow_FFT_Workset_Real *fft_real =
         (Meow_FFT_Workset_Real *)malloc(workset_bytes);
     assert(fft_real);
@@ -172,14 +172,14 @@ stereo_result_t create_image_meow(unsigned long bufsize, const uint16_t buffer[b
   return (stereo_result_t){.left = matrix_left, .right = matrix_right, .correlation = matrix_correlation};
 }
 
-void stereo_result_free(stereo_result_t r) {
+void stereo_result_release(stereo_result_t r) {
   assert(r.left);
-  free(r.left);
+  free((void *)r.left);
   if (r.right) {
-    free(r.right);
+    free((void *)r.right);
   }
   if (r.correlation) {
-    free(r.correlation);
+    free((void *) r.correlation);
   }
 }
 
