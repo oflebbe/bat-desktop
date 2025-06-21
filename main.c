@@ -156,15 +156,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    FILE *fp = fopen(argv[1], "r");
-    if (!fp)
-    {
-        fprintf(stderr, "could not open %s\n", argv[1]);
-        exit(1);
-    }
     size_t size;
-    uint16_t *raw_file = (uint16_t *)flo_mapfile(fp, &size);
-    fclose(fp);
+    uint16_t *raw_file = (uint16_t *)flo_mapfile(argv[1], &size);
     if (!raw_file)
     {
         fprintf(stderr, "could not map %s\n", argv[1]);
